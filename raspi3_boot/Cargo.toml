@@ -1,0 +1,21 @@
+[package]
+name = "raspi3_boot"
+version = "0.1.0"
+authors = ["Andre Richter <andre.o.richter@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cortex-a = "2.3.1"
+r0 = "0.2.2"
+
+[dependencies.panic-abort]
+version = "0.3.1"
+optional = true
+
+[dependencies.bcm2711-hal]
+path = "../bcm2711-hal"
+optional = true
+
+[features]
+default = []
+panic-uart1 = ["bcm2711-hal"]

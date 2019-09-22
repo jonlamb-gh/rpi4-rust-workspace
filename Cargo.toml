@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "bcm2711",
+    "bcm2711-hal",
+    "raspi3_boot",
+    "examples/uart1",
+]

@@ -1,0 +1,8 @@
+[package]
+name = "bcm2711"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+register = "0.3"
