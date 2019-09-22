@@ -1,5 +1,7 @@
 //! Serial
 //!
+//! TODO - update this once bcm2711 docs are available
+//!
 //! There are two built-in UARTS, a PL011 (UART0)
 //! and a mini UART (UART1).
 //!

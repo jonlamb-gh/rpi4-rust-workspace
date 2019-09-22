@@ -1,5 +1,7 @@
 //! Timer abstractions over the System Timer
 //!
+//! TODO - update this once bcm2711 docs are available
+//!
 //! The System Timer peripheral provides four 32-bit timer
 //! channels and a single 64-bit free running counter.
 //!

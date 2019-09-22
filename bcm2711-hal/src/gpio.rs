@@ -1,5 +1,7 @@
 //! General Purpose Input / Output
 //!
+//! TODO - update this once bcm2711 docs are available
+//!
 //! See the pinout:
 //! https://pinout.xyz/
 

@@ -1,4 +1,6 @@
 //! I2C
+//!
+//! TODO - update this once bcm2711 docs are available
 
 use crate::clocks::Clocks;
 use crate::gpio::{Alternate, Pin2, Pin3, AF0};

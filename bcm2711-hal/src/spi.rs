@@ -1,13 +1,9 @@
 //! SPI
 //!
-//! The traits and API is loosely based on https://github.com/stm32-rs/stm32f4xx-hal
-//! and the implementation from
-//! https://github.com/torvalds/linux/blob/master/drivers/spi/spi-bcm2835.c.
+//! TODO - update this once bcm2711 docs are available
 //!
-//! With the following changes:
 //! - Only implemented for SPI0 because the other two are different
 //! - Only supports chip select 0 and 1 pins
-//! - No DMA support yet
 
 // TODO - add events/etc
 
