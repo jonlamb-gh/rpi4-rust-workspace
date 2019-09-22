@@ -27,7 +27,7 @@ ENTRY(_boot_cores);
 SECTIONS
 {
     /* bare metal */
-    . = 0x8000;
+    . = 0x80000;
 
     /* When loading with u-boot, put it somewhere else as to not overwrite u-boot */
     /* . = 0x0100000; */
