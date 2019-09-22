@@ -20,6 +20,11 @@ cargo objcopy -- -O binary target/$(TARGET)/release/img /tmp/img.bin
 
 https://gitlab.com/philmd/qemu/commits/raspi4_wip
 
+```bash
+# For output on UART1
+qemu-system-aarch64 -M raspi4 -nographic -serial null -serial mon:stdio -kernel /path/to/binary
+```
+
 ## U-boot
 
 Using 64 bit U-boot:
