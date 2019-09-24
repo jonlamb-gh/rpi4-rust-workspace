@@ -13,8 +13,8 @@ use crate::gpio::{Alternate, Pin14, Pin15, AF0, AF5};
 use crate::hal::prelude::*;
 use crate::hal::serial;
 use crate::time::Bps;
-use bcm2711::uart0::*;
-use bcm2711::uart1::*;
+use bcm2711::uart0::UART0;
+use bcm2711::uart1::UART1;
 use core::fmt;
 use nb::block;
 use void::Void;
@@ -43,10 +43,11 @@ pub struct Serial<UART, PINS> {
 }
 
 impl<PINS> Serial<UART0, PINS> {
-    pub fn uart0(uart: UART0, pins: PINS, baud_rate: Bps, clocks: Clocks) -> Self
+    pub fn uart0(mut uart: UART0, pins: PINS, baud_rate: Bps, clocks: Clocks) -> Self
     where
         PINS: Pins<UART0>,
     {
+        use bcm2711::uart0::*;
         let brr = if baud_rate.0 > (clocks.uart().0 / 16) {
             (clocks.uart().0 * 8) / baud_rate.0
         } else {
@@ -54,14 +55,17 @@ impl<PINS> Serial<UART0, PINS> {
         };
 
         // Turn off UART0
-        uart.CR.set(0);
+        uart.cr
+            .modify(Control::Enable::Clear + Control::TxEnable::Clear + Control::RxEnable::Clear);
 
-        uart.ICR.write(ICR::ALL::CLEAR);
-        uart.IBRD.write(IBRD::IBRD.val(brr >> 6));
-        uart.FBRD.write(FBRD::FBRD.val(brr & 0x3F));
-        uart.LCRH.write(LCRH::WLEN::EightBit); // 8N1
-        uart.CR
-            .write(CR::UARTEN::Enabled + CR::TXE::Enabled + CR::RXE::Enabled);
+        uart.icr.modify(IntClear::All::Clear);
+        uart.ibrd
+            .modify(IntegerBaudRateDivisor::Ibrd::Field::new(brr >> 6).unwrap());
+        uart.fbrd
+            .modify(FractionalBaudRateDivisor::Fbrd::Field::new(brr & 0x3F).unwrap());
+        uart.lcrh.modify(LineControl::WordLength::EightBit); // 8N1
+        uart.cr
+            .modify(Control::Enable::Set + Control::TxEnable::Set + Control::RxEnable::Set);
 
         Serial { uart, pins }
     }
@@ -75,7 +79,8 @@ impl<PINS> serial::Write<u8> for Serial<UART0, PINS> {
     type Error = Void;
 
     fn flush(&mut self) -> nb::Result<(), Void> {
-        if !self.uart.FR.is_set(FR::TXFF) {
+        use bcm2711::uart0::Flag;
+        if !self.uart.fr.is_set(Flag::TxFull::Read) {
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -83,8 +88,11 @@ impl<PINS> serial::Write<u8> for Serial<UART0, PINS> {
     }
 
     fn write(&mut self, byte: u8) -> nb::Result<(), Void> {
-        if !self.uart.FR.is_set(FR::TXFF) {
-            self.uart.DR.set(byte as _);
+        use bcm2711::uart0::{Data, Flag};
+        if !self.uart.fr.is_set(Flag::TxFull::Read) {
+            self.uart
+                .dr
+                .modify(Data::Data::Field::new(byte as _).unwrap());
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -106,25 +114,30 @@ impl<PINS> fmt::Write for Serial<UART0, PINS> {
 }
 
 impl<PINS> Serial<UART1, PINS> {
-    pub fn uart1(uart: UART1, pins: PINS, baud_rate: Bps, clocks: Clocks) -> Self
+    pub fn uart1(mut uart: UART1, pins: PINS, baud_rate: Bps, clocks: Clocks) -> Self
     where
         PINS: Pins<UART1>,
     {
+        use bcm2711::uart1::*;
         // Mini UART uses 8-times oversampling
         // baudrate_reg = ((sys_clock / baudrate) / 8) - 1
         let brr = ((clocks.core().0 / baud_rate.0) / 8) - 1;
 
-        uart.AUX_ENABLES.modify(AUX_ENABLES::MINI_UART_ENABLE::SET);
-        uart.AUX_MU_IER.set(0);
-        uart.AUX_MU_CNTL.set(0);
-        uart.AUX_MU_LCR.write(AUX_MU_LCR::DATA_SIZE::EightBit);
-        uart.AUX_MU_MCR.set(0);
-        uart.AUX_MU_IER.set(0);
-        uart.AUX_MU_IIR.write(AUX_MU_IIR::FIFO_CLEAR::All);
-        uart.AUX_MU_BAUD.write(AUX_MU_BAUD::RATE.val(brr));
+        uart.enable.modify(AuxEnable::MiniUartEnable::Set);
+        uart.ier
+            .modify(IntEnable::IntRx::Clear + IntEnable::IntTx::Clear);
+        uart.cntl
+            .modify(Control::RxEnable::Clear + Control::TxEnable::Clear);
+        uart.lcr.modify(LineControl::DataSize::EightBit);
+        uart.mcr.modify(ModemControl::Rts::Clear);
+        uart.ier
+            .modify(IntEnable::IntRx::Clear + IntEnable::IntTx::Clear);
+        uart.iir.modify(IntIdentify::FifoClear::All);
+        uart.baudrate
+            .modify(Baudrate::Rate::Field::new(brr).unwrap());
 
-        uart.AUX_MU_CNTL
-            .write(AUX_MU_CNTL::RX_EN::Enabled + AUX_MU_CNTL::TX_EN::Enabled);
+        uart.cntl
+            .modify(Control::RxEnable::Set + Control::TxEnable::Set);
 
         Serial { uart, pins }
     }
@@ -138,8 +151,9 @@ impl<PINS> serial::Read<u8> for Serial<UART1, PINS> {
     type Error = Void;
 
     fn read(&mut self) -> nb::Result<u8, Void> {
-        if self.uart.AUX_MU_LSR.is_set(AUX_MU_LSR::DATA_READY) {
-            let mut data = self.uart.AUX_MU_IO.get() as u8;
+        use bcm2711::uart1::{Data, LineStatus};
+        if self.uart.lsr.is_set(LineStatus::DataReady::Read) {
+            let mut data = self.uart.io.get_field(Data::Data::Read).unwrap().val() as u8;
 
             // convert carrige return to newline
             if data == '\r' as _ {
@@ -157,7 +171,8 @@ impl<PINS> serial::Write<u8> for Serial<UART1, PINS> {
     type Error = Void;
 
     fn flush(&mut self) -> nb::Result<(), Void> {
-        if self.uart.AUX_MU_LSR.is_set(AUX_MU_LSR::TX_EMPTY) {
+        use bcm2711::uart1::LineStatus;
+        if self.uart.lsr.is_set(LineStatus::TxEmpty::Read) {
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -165,8 +180,11 @@ impl<PINS> serial::Write<u8> for Serial<UART1, PINS> {
     }
 
     fn write(&mut self, byte: u8) -> nb::Result<(), Void> {
-        if self.uart.AUX_MU_LSR.is_set(AUX_MU_LSR::TX_EMPTY) {
-            self.uart.AUX_MU_IO.set(byte as _);
+        use bcm2711::uart1::{Data, LineStatus};
+        if self.uart.lsr.is_set(LineStatus::TxEmpty::Read) {
+            self.uart
+                .io
+                .modify(Data::Data::Field::new(byte as _).unwrap());
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)

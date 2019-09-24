@@ -14,29 +14,30 @@ pub struct Rng {
 }
 
 impl Rng {
-    pub fn new(rng: RNG) -> Self {
+    pub fn new(mut rng: RNG) -> Self {
         // Disable ints
-        rng.INT_MASK.modify(INT_MASK::INT_OFF::True);
+        rng.int_mask.modify(IntMask::IntOff::Set);
 
         // Set warm-up count and enable
-        rng.STATUS.modify(STATUS::COUNT.val(RNG_WARMUP_COUNT));
-        rng.CTRL.modify(CTRL::ENABLE::True);
+        rng.status
+            .modify(Status::Count::Field::new(RNG_WARMUP_COUNT).unwrap());
+        rng.control.modify(Control::Enable::Set);
 
         Rng { rng }
     }
 
-    pub fn free(self) -> RNG {
-        self.rng.CTRL.modify(CTRL::ENABLE::False);
+    pub fn free(mut self) -> RNG {
+        self.rng.control.modify(Control::Enable::Clear);
         self.rng
     }
 
     pub fn next_u32(&mut self) -> Result<u32, Void> {
         // Wait for entropy
-        while self.rng.STATUS.is_set(STATUS::READY) == false {
+        while self.rng.status.is_set(Status::Ready::Read) == false {
             asm::nop();
         }
 
-        Ok(self.rng.DATA.get())
+        Ok(self.rng.data.get_field(Fifo::Data::Read).unwrap().val())
     }
 }
 

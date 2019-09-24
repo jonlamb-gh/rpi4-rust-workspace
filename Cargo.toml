@@ -4,5 +4,9 @@ members = [
     "bcm2711",
     "bcm2711-hal",
     "raspi3_boot",
+    "examples/uart0",
     "examples/uart1",
+    "examples/mbox",
+    "examples/keypad",
+    "examples/embedded-graphics",
 ]

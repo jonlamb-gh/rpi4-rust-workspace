@@ -1,4 +1,4 @@
-use bcm2711::mbox::*;
+use bcm2711::mbox::{Status, WriteAddr, MBOX};
 use core::convert::TryFrom;
 use core::sync::atomic::{compiler_fence, Ordering};
 use cortex_a::{asm, barrier};
@@ -78,7 +78,7 @@ impl Mailbox {
 
         // Wait until we can write to the mailbox
         loop {
-            if self.mbox.STATUS.is_set(STATUS::FULL) == false {
+            if self.mbox.status.is_set(Status::Full::Read) == false {
                 break;
             }
             asm::nop();
@@ -86,20 +86,21 @@ impl Mailbox {
 
         // Write the physical address of our message
         // to the mailbox with channel identifier
-        self.mbox
-            .WRITE
-            .set((buffer_paddr & !0xF) | (u32::from(channel) & 0xF));
+        self.mbox.write_addr.modify(
+            WriteAddr::Addr::Field::new((buffer_paddr & !0xF) | (u32::from(channel) & 0xF))
+                .unwrap(),
+        );
 
         // Wait for a response
         loop {
             loop {
-                if self.mbox.STATUS.is_set(STATUS::EMPTY) == false {
+                if self.mbox.status.is_set(Status::Empty::Read) == false {
                     break;
                 }
                 asm::nop();
             }
 
-            let resp_word = self.mbox.READ.get();
+            let resp_word = self.mbox.read_addr.read();
 
             // Check if it is a response to our message
             if ((resp_word & 0xF) == channel.into()) && ((resp_word & !0xF) == buffer_paddr) {

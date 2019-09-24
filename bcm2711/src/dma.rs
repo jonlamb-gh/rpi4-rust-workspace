@@ -3,7 +3,6 @@
 use crate::MMIO_BASE;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use register::{mmio::ReadOnly, mmio::ReadWrite, register_bitfields};
 
 /// Base address, each channel is offset by 0x100
 pub const PADDR: usize = MMIO_BASE + 0x0000_7000;
@@ -33,135 +32,206 @@ pub const CHANNEL12_OFFSET: usize = 0xC00;
 pub const CHANNEL13_OFFSET: usize = 0xD00;
 pub const CHANNEL14_OFFSET: usize = 0xE00;
 
-register_bitfields! {
-    u32,
-
+register! {
     /// Control and status
-    CS [
-        ACTIVE OFFSET(0) NUMBITS(1) [],
-        END OFFSET(1) NUMBITS(1) [],
-        INT OFFSET(2) NUMBITS(1) [],
-        DREQ OFFSET(3) NUMBITS(1) [],
-        PAUSED OFFSET(4) NUMBITS(1) [],
-        DREQ_STOPS_DMA OFFSET(5) NUMBITS(1) [],
-        WAITING_FOR_OUTSTANDING_WRITES OFFSET(6) NUMBITS(1) [],
-        ERROR OFFSET(8) NUMBITS(1) [],
-        PRIORITY OFFSET(16) NUMBITS(4) [],
-        PANIC_PRIORITY OFFSET(20) NUMBITS(4) [],
-        WAIT_FOR_OUTSTANDING_WRITES OFFSET(28) NUMBITS(1) [],
-        DISDEBUG OFFSET(29) NUMBITS(1) [],
-        ABORT OFFSET(30) NUMBITS(1) [],
-        RESET OFFSET(31) NUMBITS(1) []
-    ],
+    ControlStatus,
+    u32,
+    RW,
+    Fields [
+        Active WIDTH(U1) OFFSET(U0),
+        End WIDTH(U1) OFFSET(U1),
+        Int WIDTH(U1) OFFSET(U2),
+        DReq WIDTH(U1) OFFSET(U3),
+        Paused WIDTH(U1) OFFSET(U4),
+        DReqStopsDMA WIDTH(U1) OFFSET(U5),
+        WaitingForOutstandingWrites WIDTH(U1) OFFSET(U6),
+        Error WIDTH(U1) OFFSET(U8),
+        Priority WIDTH(U4) OFFSET(U16),
+        PanicPriority WIDTH(U4) OFFSET(U20),
+        WaitForOutstandingWrites WIDTH(U1) OFFSET(U28),
+        DisDebug WIDTH(U1) OFFSET(U29),
+        Abort WIDTH(U1) OFFSET(U30),
+        Reset WIDTH(U1) OFFSET(U31),
+    ]
+}
 
+register! {
+    DcbAddr,
+    u32,
+    RW,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
     /// Transfer information
-    TI [
-        INTEN OFFSET(0) NUMBITS(1) [],
-        TDMODE OFFSET(1) NUMBITS(1) [],
-        WAIT_RESP OFFSET(3) NUMBITS(1) [],
-        DEST_INC OFFSET(4) NUMBITS(1) [],
-        DEST_WIDTH OFFSET(5) NUMBITS(1) [],
-        DEST_DREQ OFFSET(6) NUMBITS(1) [],
-        DEST_IGNORE OFFSET(7) NUMBITS(1) [],
-        SRC_INC OFFSET(8) NUMBITS(1) [],
-        SRC_WIDTH OFFSET(9) NUMBITS(1) [],
-        SRC_DREQ OFFSET(10) NUMBITS(1) [],
-        SRC_IGNORE OFFSET(11) NUMBITS(1) [],
-        BURST_LENGTH OFFSET(12) NUMBITS(4) [],
-        PERMAP OFFSET(16) NUMBITS(5) [],
-        WAITS OFFSET(21) NUMBITS(5) [],
-        NO_WIDE_BURSTS OFFSET(26) NUMBITS(1) []
-    ],
+    TxfrInfo,
+    u32,
+    RO,
+    Fields [
+        IntEn WIDTH(U1) OFFSET(U0),
+        TdMode WIDTH(U1) OFFSET(U1),
+        WaitResp WIDTH(U1) OFFSET(U3),
+        DestInc WIDTH(U1) OFFSET(U4),
+        DestWidth WIDTH(U1) OFFSET(U5) [
+            Width32  = U0,
+            Width128 = U1
+        ],
+        DestDReq WIDTH(U1) OFFSET(U6),
+        DestIgnore WIDTH(U1) OFFSET(U7),
+        SrcInc WIDTH(U1) OFFSET(U8),
+        SrcWidth WIDTH(U1) OFFSET(U9)[
+            Width32  = U0,
+            Width128 = U1
+        ],
+        SrcDReq WIDTH(U1) OFFSET(U10),
+        SrcIgnore WIDTH(U1) OFFSET(U11),
+        BurstLength WIDTH(U4) OFFSET(U12),
+        PeriphMap WIDTH(U5) OFFSET(U16),
+        Waits WIDTH(U5) OFFSET(U21),
+        NoWideBursts WIDTH(U1) OFFSET(U26),
+    ]
+}
 
+register! {
+    SrcAddr,
+    u32,
+    RO,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
+    DestAddr,
+    u32,
+    RO,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
     /// Transfer length
-    TXFR_LEN [
-        XLENGTH OFFSET(0) NUMBITS(16) [],
-        YLENGTH OFFSET(16) NUMBITS(14) []
-    ],
+    TxfrLen,
+    u32,
+    RO,
+    Fields [
+        XLen WIDTH(U16) OFFSET(U0),
+        YLen WIDTH(U14) OFFSET(U16),
+    ]
+}
 
+register! {
     /// 2D stride
-    STRIDE [
-        S_STRIDE OFFSET(0) NUMBITS(16) [],
-        D_STRIDE OFFSET(16) NUMBITS(16) []
-    ],
+    Stride,
+    u32,
+    RO,
+    Fields [
+        SrcStride WIDTH(U16) OFFSET(U0),
+        DestStride WIDTH(U16) OFFSET(U16),
+    ]
+}
 
-    /// Debug
-    DEBUG [
-        READ_LAST_NOT_SET_ERROR OFFSET(0) NUMBITS(1) [],
-        FIFO_ERROR OFFSET(1) NUMBITS(1) [],
-        READ_ERROR OFFSET(2) NUMBITS(1) [],
-        OUTSTANDING_WRITES OFFSET(4) NUMBITS(4) [],
-        DMA_ID OFFSET(8) NUMBITS(8) [],
-        DMA_STATE OFFSET(16) NUMBITS(8) [],
-        VERSION OFFSET(25) NUMBITS(3) [],
-        LITE OFFSET(28) NUMBITS(1) []
-    ],
+register! {
+    NextDcbAddr,
+    u32,
+    RO,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
+    ]
+}
 
+register! {
+    Debug,
+    u32,
+    RO,
+    Fields [
+        ReadLastNotSetError WIDTH(U1) OFFSET(U0),
+        FifoError WIDTH(U1) OFFSET(U1),
+        ReadError WIDTH(U1) OFFSET(U2),
+        OutstandingWrites WIDTH(U4) OFFSET(U4),
+        DmaId WIDTH(U8) OFFSET(U8),
+        DmaState WIDTH(U8) OFFSET(U16),
+        Version WIDTH(U3) OFFSET(U25),
+        Lite WIDTH(U1) OFFSET(U28),
+    ]
+}
+
+register! {
     /// Interrupt status
-    INT_STATUS [
-        INT0 OFFSET(0) NUMBITS(1) [],
-        INT1 OFFSET(1) NUMBITS(1) [],
-        INT2 OFFSET(2) NUMBITS(1) [],
-        INT3 OFFSET(3) NUMBITS(1) [],
-        INT4 OFFSET(4) NUMBITS(1) [],
-        INT5 OFFSET(5) NUMBITS(1) [],
-        INT6 OFFSET(6) NUMBITS(1) [],
-        INT7 OFFSET(7) NUMBITS(1) [],
-        INT8 OFFSET(8) NUMBITS(1) [],
-        INT9 OFFSET(9) NUMBITS(1) [],
-        INT10 OFFSET(10) NUMBITS(1) [],
-        INT11 OFFSET(11) NUMBITS(1) [],
-        INT12 OFFSET(12) NUMBITS(1) [],
-        INT13 OFFSET(13) NUMBITS(1) [],
-        INT14 OFFSET(14) NUMBITS(1) [],
-        INT15 OFFSET(15) NUMBITS(1) []
-    ],
+    IntStatus,
+    u32,
+    RW,
+    Fields [
+        Int0 WIDTH(U1) OFFSET(U0),
+        Int1 WIDTH(U1) OFFSET(U1),
+        Int2 WIDTH(U1) OFFSET(U2),
+        Int3 WIDTH(U1) OFFSET(U3),
+        Int4 WIDTH(U1) OFFSET(U4),
+        Int5 WIDTH(U1) OFFSET(U5),
+        Int6 WIDTH(U1) OFFSET(U6),
+        Int7 WIDTH(U1) OFFSET(U7),
+        Int8 WIDTH(U1) OFFSET(U8),
+        Int9 WIDTH(U1) OFFSET(U9),
+        Int10 WIDTH(U1) OFFSET(U10),
+        Int11 WIDTH(U1) OFFSET(U11),
+        Int12 WIDTH(U1) OFFSET(U12),
+        Int13 WIDTH(U1) OFFSET(U13),
+        Int14 WIDTH(U1) OFFSET(U14),
+        Int15 WIDTH(U1) OFFSET(U15),
+    ]
+}
 
+register! {
     /// Global enable bits
-    ENABLE [
-        EN0 OFFSET(0) NUMBITS(1) [],
-        EN1 OFFSET(1) NUMBITS(1) [],
-        EN2 OFFSET(2) NUMBITS(1) [],
-        EN3 OFFSET(3) NUMBITS(1) [],
-        EN4 OFFSET(4) NUMBITS(1) [],
-        EN5 OFFSET(5) NUMBITS(1) [],
-        EN6 OFFSET(6) NUMBITS(1) [],
-        EN7 OFFSET(7) NUMBITS(1) [],
-        EN8 OFFSET(8) NUMBITS(1) [],
-        EN9 OFFSET(9) NUMBITS(1) [],
-        EN10 OFFSET(10) NUMBITS(1) [],
-        EN11 OFFSET(11) NUMBITS(1) [],
-        EN12 OFFSET(12) NUMBITS(1) [],
-        EN13 OFFSET(13) NUMBITS(1) [],
-        EN14 OFFSET(14) NUMBITS(1) [],
-        EN15 OFFSET(15) NUMBITS(1) []
+    Enable,
+    u32,
+    RW,
+    Fields [
+        En0 WIDTH(U1) OFFSET(U0),
+        En1 WIDTH(U1) OFFSET(U1),
+        En2 WIDTH(U1) OFFSET(U2),
+        En3 WIDTH(U1) OFFSET(U3),
+        En4 WIDTH(U1) OFFSET(U4),
+        En5 WIDTH(U1) OFFSET(U5),
+        En6 WIDTH(U1) OFFSET(U6),
+        En7 WIDTH(U1) OFFSET(U7),
+        En8 WIDTH(U1) OFFSET(U8),
+        En9 WIDTH(U1) OFFSET(U9),
+        En10 WIDTH(U1) OFFSET(U10),
+        En11 WIDTH(U1) OFFSET(U11),
+        En12 WIDTH(U1) OFFSET(U12),
+        En13 WIDTH(U1) OFFSET(U13),
+        En14 WIDTH(U1) OFFSET(U14),
+        En15 WIDTH(U1) OFFSET(U15),
     ]
 }
 
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct GlobalIntStatusRegisterBlock {
-    pub INT_STATUS: ReadWrite<u32, INT_STATUS::Register>,
+    pub int_status: IntStatus::Register,
 }
 
 #[allow(non_snake_case)]
 #[repr(C)]
 pub struct GlobalEnableRegisterBlock {
-    pub ENABLE: ReadWrite<u32, ENABLE::Register>,
+    pub enable: Enable::Register,
 }
 
-#[allow(non_snake_case)]
 #[repr(C)]
 pub struct RegisterBlock {
-    pub CS: ReadWrite<u32, CS::Register>,            // 0x00
-    pub CONBLK_AD: ReadWrite<u32>,                   // 0x04
-    pub TI: ReadOnly<u32, TI::Register>,             // 0x08
-    pub SOURCE_AD: ReadOnly<u32>,                    // 0x0C
-    pub DEST_AD: ReadOnly<u32>,                      // 0x10
-    pub TXFR_LEN: ReadOnly<u32, TXFR_LEN::Register>, // 0x14
-    pub STRIDE: ReadOnly<u32, STRIDE::Register>,     // 0x18
-    pub NEXTCONBK: ReadOnly<u32>,                    // 0x1C
-    pub DEBUG: ReadOnly<u32, DEBUG::Register>,       // 0x20
+    pub cs: ControlStatus::Register,          // 0x00
+    pub dcb_addr: DcbAddr::Register,          // 0x04
+    pub ti: TxfrInfo::Register,               // 0x08
+    pub src_addr: SrcAddr::Register,          // 0x0C
+    pub dest_addr: DestAddr::Register,        // 0x10
+    pub txfr_len: TxfrLen::Register,          // 0x14
+    pub stride: Stride::Register,             // 0x18
+    pub next_dcb_addr: NextDcbAddr::Register, // 0x1C
+    pub debug: Debug::Register,               // 0x20
 }
 
 pub struct DMA {

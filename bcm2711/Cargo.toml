@@ -5,4 +5,5 @@ authors = ["Jon Lamb"]
 edition = "2018"
 
 [dependencies]
-register = "0.3"
+typenum = "1.10"
+bounded-registers = "0.1.0"

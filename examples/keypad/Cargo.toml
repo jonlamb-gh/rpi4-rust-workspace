@@ -1,0 +1,17 @@
+[package]
+name = "keypad"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../../bcm2711-hal" }
+
+[dependencies.keypad]
+git = "https://github.com/jonlamb-gh/keypad.git"
+branch = "digital-v2"
+
+[dependencies.raspi3_boot]
+path = "../../raspi3_boot"
+default-features = false
+features = ["panic-uart1"]

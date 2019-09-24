@@ -1,0 +1,9 @@
+[package]
+name = "display"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../bcm2711-hal" }
+embedded-graphics = "0.6.0-alpha.2"

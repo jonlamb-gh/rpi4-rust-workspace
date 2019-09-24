@@ -3,51 +3,91 @@
 use crate::MMIO_BASE;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use register::{mmio::ReadOnly, mmio::ReadWrite, register_bitfields};
 
 pub const PADDR: usize = MMIO_BASE + 0x0000_3000;
 
-register_bitfields! {
-    u32,
-
+register! {
     /// System Timer Control/Status
-    CS [
-        MATCH0 OFFSET(0) NUMBITS(1) [
-            True = 1,
-            False = 0
-        ],
-        MATCH1 OFFSET(1) NUMBITS(1) [
-            True = 1,
-            False = 0
-        ],
-        MATCH2 OFFSET(2) NUMBITS(1) [
-            True = 1,
-            False = 0
-        ],
-        MATCH3 OFFSET(3) NUMBITS(1) [
-            True = 1,
-            False = 0
-        ]
+    ControlStatus,
+    u32,
+    RW,
+    Fields [
+        Match0 WIDTH(U1) OFFSET(U0) [],
+        Match1 WIDTH(U1) OFFSET(U1) [],
+        Match2 WIDTH(U1) OFFSET(U2) [],
+        Match3 WIDTH(U1) OFFSET(U3) [],
     ]
 }
 
-#[allow(non_snake_case)]
+register! {
+    /// System Timer Counter Lower 32 bits
+    CounterLow,
+    u32,
+    RO,
+    Fields [
+        Count WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    /// System Timer Counter Higher 32 bits
+    CounterHigh,
+    u32,
+    RO,
+    Fields [
+        Count WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    /// System Timer Compare 0
+    Compare0,
+    u32,
+    RW,
+    Fields [
+        Cmp WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    /// System Timer Compare 1
+    Compare1,
+    u32,
+    RW,
+    Fields [
+        Cmp WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    /// System Timer Compare 2
+    Compare2,
+    u32,
+    RW,
+    Fields [
+        Cmp WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    /// System Timer Compare 3
+    Compare3,
+    u32,
+    RW,
+    Fields [
+        Cmp WIDTH(U32) OFFSET(U0) [],
+    ]
+}
+
 #[repr(C)]
 pub struct RegisterBlock {
-    /// System Timer Control/Status
-    pub CS: ReadWrite<u32, CS::Register>, // 0x00
-    /// System Timer Counter Lower 32 bits
-    pub LO: ReadOnly<u32>, // 0x04
-    /// System Timer Counter Higher 32 bits
-    pub HI: ReadOnly<u32>, // 0x08
-    /// System Timer Compare 0
-    pub C0: ReadWrite<u32>, // 0x0C
-    /// System Timer Compare 1
-    pub C1: ReadWrite<u32>, // 0x10
-    /// System Timer Compare 2
-    pub C2: ReadWrite<u32>, // 0x14
-    /// System Timer Compare 3
-    pub C3: ReadWrite<u32>, // 0x18
+    pub cs: ControlStatus::Register, // 0x00
+    pub lo: CounterLow::Register,    // 0x04
+    pub hi: CounterHigh::Register,   // 0x08
+    pub c0: Compare0::Register,      // 0x0C
+    pub c1: Compare1::Register,      // 0x10
+    pub c2: Compare2::Register,      // 0x14
+    pub c3: Compare3::Register,      // 0x18
 }
 
 pub struct SysTimer {

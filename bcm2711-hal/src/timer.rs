@@ -86,17 +86,25 @@ impl TimerExt for SysTimer {
 impl Timer {
     fn t1_update(&mut self) {
         // Clear the interrupt, if any, write a 1 to clear
-        self.timer.CS.modify(CS::MATCH1::SET);
+        self.timer.cs.modify(ControlStatus::Match1::Set);
 
         // Timers compare against the lower 32 bits of the u64 counter
-        let cmp = self.timer.LO.get().wrapping_add(self.ticks);
+        let cmp = self
+            .timer
+            .lo
+            .get_field(CounterLow::Count::Read)
+            .unwrap()
+            .val()
+            .wrapping_add(self.ticks);
 
         // Set the output compare register
-        self.timer.C0.set(cmp);
+        self.timer
+            .c1
+            .modify(Compare1::Cmp::Field::new(cmp).unwrap());
     }
 
     fn t1_wait(&mut self) -> nb::Result<(), Void> {
-        if self.timer.CS.is_set(CS::MATCH1) {
+        if self.timer.cs.is_set(ControlStatus::Match1::Read) {
             // Ack/clear and update compare
             self.t1_update();
             Ok(())
@@ -107,17 +115,25 @@ impl Timer {
 
     fn t3_update(&mut self) {
         // Clear the interrupt, if any, write a 1 to clear
-        self.timer.CS.modify(CS::MATCH3::SET);
+        self.timer.cs.modify(ControlStatus::Match3::Set);
 
         // Timers compare against the lower 32 bits of the u64 counter
-        let cmp = self.timer.LO.get().wrapping_add(self.ticks);
+        let cmp = self
+            .timer
+            .lo
+            .get_field(CounterLow::Count::Read)
+            .unwrap()
+            .val()
+            .wrapping_add(self.ticks);
 
         // Set the output compare register
-        self.timer.C3.set(cmp);
+        self.timer
+            .c3
+            .modify(Compare3::Cmp::Field::new(cmp).unwrap());
     }
 
     fn t3_wait(&mut self) -> nb::Result<(), Void> {
-        if self.timer.CS.is_set(CS::MATCH3) {
+        if self.timer.cs.is_set(ControlStatus::Match3::Read) {
             // Ack/clear and update compare
             self.t3_update();
             Ok(())
@@ -177,13 +193,13 @@ impl SysCounter {
 }
 
 fn read_sys_counter(timer: &SysTimer) -> u64 {
-    let mut hi = timer.HI.get();
-    let mut lo = timer.LO.get();
+    let mut hi = timer.hi.get_field(CounterHigh::Count::Read).unwrap().val();
+    let mut lo = timer.lo.get_field(CounterLow::Count::Read).unwrap().val();
 
     // We have to repeat if high word changed during read
-    if hi != timer.HI.get() {
-        hi = timer.HI.get();
-        lo = timer.LO.get();
+    if hi != timer.hi.get_field(CounterHigh::Count::Read).unwrap().val() {
+        hi = timer.hi.get_field(CounterHigh::Count::Read).unwrap().val();
+        lo = timer.lo.get_field(CounterLow::Count::Read).unwrap().val();
     }
 
     (u64::from(hi) << 32) | u64::from(lo)

@@ -5,94 +5,143 @@
 use crate::MMIO_BASE;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use register::{mmio::ReadOnly, mmio::ReadWrite, mmio::WriteOnly, register_bitfields};
 
 pub const PADDR: usize = MMIO_BASE + 0x21_5000;
 
-register_bitfields! {
+register! {
+    AuxEnable,
     u32,
-
-    /// Auxiliary enables
-    AUX_ENABLES [
+    RW,
+    Fields [
         /// If set the mini UART is enabled. The UART will immediately
         /// start receiving data, especially if the UART1_RX line is
         /// low.
         /// If clear the mini UART is disabled. That also disables any
         /// mini UART register access
-        MINI_UART_ENABLE OFFSET(0) NUMBITS(1) []
-    ],
-
-    /// Mini Uart Interrupt Identify
-    AUX_MU_IIR [
-        /// Writing with bit 1 set will clear the receive FIFO
-        /// Writing with bit 2 set will clear the transmit FIFO
-        FIFO_CLEAR OFFSET(1) NUMBITS(2) [
-            Rx = 0b01,
-            Tx = 0b10,
-            All = 0b11
-        ]
-    ],
-
-    /// Mini Uart Line Control
-    AUX_MU_LCR [
-        /// Mode the UART works in
-        DATA_SIZE OFFSET(0) NUMBITS(2) [
-            SevenBit = 0b00,
-            EightBit = 0b11
-        ]
-    ],
-
-    /// Mini Uart Line Status
-    AUX_MU_LSR [
-        /// This bit is set if the transmit FIFO can accept at least
-        /// one byte.
-        TX_EMPTY   OFFSET(5) NUMBITS(1) [],
-
-        /// This bit is set if the receive FIFO holds at least 1
-        /// symbol.
-        DATA_READY OFFSET(0) NUMBITS(1) []
-    ],
-
-    /// Mini Uart Extra Control
-    AUX_MU_CNTL [
-        /// If this bit is set the mini UART transmitter is enabled.
-        /// If this bit is clear the mini UART transmitter is disabled.
-        TX_EN OFFSET(1) NUMBITS(1) [
-            Disabled = 0,
-            Enabled = 1
-        ],
-
-        /// If this bit is set the mini UART receiver is enabled.
-        /// If this bit is clear the mini UART receiver is disabled.
-        RX_EN OFFSET(0) NUMBITS(1) [
-            Disabled = 0,
-            Enabled = 1
-        ]
-    ],
-
-    /// Mini Uart Baudrate
-    AUX_MU_BAUD [
-        /// Mini UART baudrate counter
-        RATE OFFSET(0) NUMBITS(16) []
+        MiniUartEnable WIDTH(U1) OFFSET(U0) [],
+        Spi1Enable WIDTH(U1) OFFSET(U1) [],
+        Spi2Enable WIDTH(U1) OFFSET(U2) [],
     ]
 }
 
-#[allow(non_snake_case)]
+register! {
+    Data,
+    u32,
+    RW,
+    Fields [
+        Data WIDTH(U8) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    IntEnable,
+    u32,
+    WO,
+    Fields [
+        IntRx WIDTH(U1) OFFSET(U0) [],
+        IntTx WIDTH(U1) OFFSET(U1) [],
+    ]
+}
+
+register! {
+    /// Mini Uart Interrupt Identify
+    IntIdentify,
+    u32,
+    RW,
+    Fields [
+        /// Writing with bit 1 set will clear the receive FIFO
+        /// Writing with bit 2 set will clear the transmit FIFO
+        FifoClear WIDTH(U2) OFFSET(U1) [
+            NoAction = U0,
+            Rx = U1,
+            Tx = U2,
+            All = U3
+        ],
+    ]
+}
+
+register! {
+    LineControl,
+    u32,
+    WO,
+    Fields [
+        /// Mode the UART works in
+        DataSize WIDTH(U2) OFFSET(U0) [
+            SevenBit = U0,
+            EightBit = U3
+        ],
+    ]
+}
+
+register! {
+    ModemControl,
+    u32,
+    WO,
+    Fields [
+        Rts WIDTH(U1) OFFSET(U0) [],
+    ]
+}
+
+register! {
+    LineStatus,
+    u32,
+    RO,
+    Fields [
+        /// This bit is set if the receive FIFO holds at least 1
+        /// symbol.
+        DataReady WIDTH(U1) OFFSET(U0) [],
+
+        /// This bit is set if the transmit FIFO can accept at least
+        /// one byte.
+        TxEmpty WIDTH(U1) OFFSET(U5) [],
+    ]
+}
+
+register! {
+    Control,
+    u32,
+    WO,
+    Fields [
+        /// If this bit is set the mini UART receiver is enabled.
+        /// If this bit is clear the mini UART receiver is disabled.
+        RxEnable WIDTH(U1) OFFSET(U0) [
+            Disabled = U0,
+            Enabled = U1
+        ],
+
+        /// If this bit is set the mini UART transmitter is enabled.
+        /// If this bit is clear the mini UART transmitter is disabled.
+        TxEnable WIDTH(U1) OFFSET(U1) [
+            Disabled = U0,
+            Enabled = U1
+        ],
+    ]
+}
+
+register! {
+    Baudrate,
+    u32,
+    WO,
+    Fields [
+        Rate WIDTH(U16) OFFSET(U0) [],
+    ]
+}
+
 #[repr(C)]
 pub struct RegisterBlock {
-    __reserved_0: u32,                                      // 0x00
-    pub AUX_ENABLES: ReadWrite<u32, AUX_ENABLES::Register>, // 0x04
-    __reserved_1: [u32; 14],                                // 0x08
-    pub AUX_MU_IO: ReadWrite<u32>,                          // 0x40 - Mini Uart I/O Data
-    pub AUX_MU_IER: WriteOnly<u32>,                         // 0x44 - Mini Uart Interrupt Enable
-    pub AUX_MU_IIR: WriteOnly<u32, AUX_MU_IIR::Register>,   // 0x48
-    pub AUX_MU_LCR: WriteOnly<u32, AUX_MU_LCR::Register>,   // 0x4C
-    pub AUX_MU_MCR: WriteOnly<u32>,                         // 0x50
-    pub AUX_MU_LSR: ReadOnly<u32, AUX_MU_LSR::Register>,    // 0x54
-    __reserved_2: [u32; 2],                                 // 0x58
-    pub AUX_MU_CNTL: WriteOnly<u32, AUX_MU_CNTL::Register>, // 0x60
-    __reserved_3: u32,                                      // 0x64
-    pub AUX_MU_BAUD: WriteOnly<u32, AUX_MU_BAUD::Register>, // 0x68
+    __reserved_0: u32,                // 0x00
+    pub enable: AuxEnable::Register,  // 0x04
+    __reserved_1: [u32; 14],          // 0x08
+    pub io: Data::Register,           // 0x40
+    pub ier: IntEnable::Register,     // 0x44
+    pub iir: IntIdentify::Register,   // 0x48
+    pub lcr: LineControl::Register,   // 0x4C
+    pub mcr: ModemControl::Register,  // 0x50
+    pub lsr: LineStatus::Register,    // 0x54
+    __reserved_2: [u32; 2],           // 0x58
+    pub cntl: Control::Register,      // 0x60
+    __reserved_3: u32,                // 0x64
+    pub baudrate: Baudrate::Register, // 0x68
 }
 
 pub struct UART1 {

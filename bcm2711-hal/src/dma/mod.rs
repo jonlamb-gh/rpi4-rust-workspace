@@ -57,15 +57,15 @@ pub struct Channel {
 
 impl Channel {
     pub fn is_lite(&self) -> bool {
-        self.dma.DEBUG.is_set(DEBUG::LITE)
+        self.dma.debug.is_set(Debug::Lite::Read)
     }
 
     pub fn dma_id(&self) -> u8 {
-        self.dma.DEBUG.read(DEBUG::DMA_ID) as _
+        self.dma.debug.get_field(Debug::DmaId::Read).unwrap().val() as _
     }
 
     pub fn is_busy(&self) -> bool {
-        self.dma.CS.is_set(CS::ACTIVE)
+        self.dma.cs.is_set(ControlStatus::Active::Read)
     }
 
     pub fn abort(&mut self) {
@@ -75,14 +75,14 @@ impl Channel {
 
     pub fn reset(&mut self) {
         // TODO - abort first?
-        self.dma.CS.modify(CS::RESET::SET);
-        while self.dma.CS.is_set(CS::RESET) == true {}
+        self.dma.cs.modify(ControlStatus::Reset::Set);
+        while self.dma.cs.is_set(ControlStatus::Reset::Read) == true {}
     }
 
     pub fn wait(&self) {
         unsafe { barrier::dsb(barrier::SY) };
 
-        while self.dma.CS.is_set(CS::ACTIVE) {
+        while self.dma.cs.is_set(ControlStatus::Active::Read) {
             asm::nop();
         }
 
@@ -102,30 +102,37 @@ impl Channel {
         unsafe { barrier::dsb(barrier::SY) };
 
         self.dma
-            .CONBLK_AD
-            .set(dcb_paddr | bus_address_bits::ALIAS_4_L2_COHERENT);
+            .dcb_addr
+            .write(dcb_paddr | bus_address_bits::ALIAS_4_L2_COHERENT);
 
-        self.dma.CS.modify(CS::ACTIVE::SET);
+        self.dma.cs.modify(ControlStatus::Active::Set);
     }
 
     pub fn errors(&self) -> bool {
-        if self.dma.CS.is_set(CS::ERROR) {
+        if self.dma.cs.is_set(ControlStatus::Error::Read) {
             return true;
         }
 
-        if self.dma.DEBUG.is_set(DEBUG::READ_LAST_NOT_SET_ERROR) {
+        if self.dma.debug.is_set(Debug::ReadLastNotSetError::Read) {
             return true;
         }
 
-        if self.dma.DEBUG.is_set(DEBUG::FIFO_ERROR) {
+        if self.dma.debug.is_set(Debug::FifoError::Read) {
             return true;
         }
 
-        if self.dma.DEBUG.is_set(DEBUG::READ_ERROR) {
+        if self.dma.debug.is_set(Debug::ReadError::Read) {
             return true;
         }
 
-        if self.dma.DEBUG.read(DEBUG::OUTSTANDING_WRITES) != 0 {
+        if self
+            .dma
+            .debug
+            .get_field(Debug::OutstandingWrites::Read)
+            .unwrap()
+            .val()
+            != 0
+        {
             return true;
         }
 

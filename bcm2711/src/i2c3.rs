@@ -1,19 +1,19 @@
-//! Broadcom Serial Controller 2
+//! I2C3
 
-use crate::bsc0::RegisterBlock;
+use crate::i2c0::RegisterBlock;
 use crate::MMIO_BASE;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
-pub const PADDR: usize = MMIO_BASE + 0x80_5000;
+pub const PADDR: usize = MMIO_BASE + 0x20_5600;
 
-pub struct I2C2 {
+pub struct I2C3 {
     _marker: PhantomData<*const ()>,
 }
 
-unsafe impl Send for I2C2 {}
+unsafe impl Send for I2C3 {}
 
-impl I2C2 {
+impl I2C3 {
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
@@ -29,14 +29,14 @@ impl I2C2 {
     }
 }
 
-impl Deref for I2C2 {
+impl Deref for I2C3 {
     type Target = RegisterBlock;
     fn deref(&self) -> &RegisterBlock {
         unsafe { &*self.as_ptr() }
     }
 }
 
-impl DerefMut for I2C2 {
+impl DerefMut for I2C3 {
     fn deref_mut(&mut self) -> &mut RegisterBlock {
         unsafe { &mut *self.as_mut_ptr() }
     }

@@ -9,6 +9,7 @@ bcm2711 = { path = "../bcm2711" }
 cortex-a = "2.7"
 nb = "0.1"
 bitfield = "0.13"
+typenum = "1.10"
 
 [dependencies.void]
 default-features = false

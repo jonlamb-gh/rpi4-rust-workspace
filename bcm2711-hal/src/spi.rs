@@ -13,6 +13,7 @@ use crate::hal::spi::{self, Mode, Phase, Polarity};
 use crate::time::Hertz;
 use bcm2711::spi0::*;
 use nb::block;
+use typenum::consts::U0;
 
 /// SPI error
 #[derive(Debug)]
@@ -101,25 +102,29 @@ pub struct Spi<SPI, PINS> {
 }
 
 impl<PINS> Spi<SPI0, PINS> {
-    pub fn spi0(spi: SPI0, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
+    pub fn spi0(mut spi: SPI0, pins: PINS, mode: Mode, freq: Hertz, clocks: Clocks) -> Self
     where
         PINS: Pins<SPI0>,
     {
         // Disable, reset FIFOs
-        spi.CS.modify(
-            CS::TA::CLEAR
-                + CS::DMAEN::CLEAR
-                + CS::INTD::CLEAR
-                + CS::INTR::CLEAR
-                + CS::CLEAR::ClearTxRx,
+        spi.cs.modify(
+            ControlStatus::TransferActive::Clear
+                + ControlStatus::DmaEnable::Clear
+                + ControlStatus::IntOnDone::Clear
+                + ControlStatus::IntOnRx::Clear
+                + ControlStatus::FifoClear::ClearTxRx,
         );
 
-        spi.DLEN.modify(DLEN::LEN.val(0));
+        spi.data_len.modify(DataLength::Len::Field::checked::<U0>());
 
         // Clock polarity and phase
-        spi.CS.modify(
-            CS::CPOL.val((mode.polarity == Polarity::IdleHigh) as _)
-                + CS::CPHA.val((mode.phase == Phase::CaptureOnSecondTransition) as _),
+        spi.cs.modify(
+            ControlStatus::ClockPolarity::Field::new((mode.polarity == Polarity::IdleHigh) as _)
+                .unwrap()
+                + ControlStatus::ClockPhase::Field::new(
+                    (mode.phase == Phase::CaptureOnSecondTransition) as _,
+                )
+                .unwrap(),
         );
 
         // TODO - need to construct Clocks using mailbox data from vc?
@@ -142,14 +147,15 @@ impl<PINS> Spi<SPI0, PINS> {
             0
         };
 
-        spi.CLK.modify(CLK::CDIV.val(cdiv));
+        spi.clock
+            .modify(ClockDivider::Divider::Field::new(cdiv).unwrap());
 
-        spi.CS.modify(CS::REN::CLEAR);
+        spi.cs.modify(ControlStatus::ReadEnable::Clear);
 
         // TODO - only handling NoCs atm, meaning software has
         // to drive CS gpio pins
         // need to add support for hw-controled CS pins
-        spi.CS.modify(CS::CS::NO_CS);
+        spi.cs.modify(ControlStatus::ChipSelect::NoCS);
 
         Spi { spi, pins }
     }
@@ -176,8 +182,8 @@ impl<PINS> Spi<SPI0, PINS> {
 
     #[inline]
     fn rx(&mut self) -> nb::Result<u8, Error> {
-        if self.spi.CS.is_set(CS::RXD) {
-            Ok((self.spi.FIFO.get() & 0xFF) as u8)
+        if self.spi.cs.is_set(ControlStatus::RxReady::Read) {
+            Ok((self.spi.fifo.read() & 0xFF) as u8)
         } else {
             Err(nb::Error::WouldBlock)
         }
@@ -185,8 +191,10 @@ impl<PINS> Spi<SPI0, PINS> {
 
     #[inline]
     fn tx(&mut self, byte: u8) -> nb::Result<(), Error> {
-        if self.spi.CS.is_set(CS::TXD) {
-            self.spi.FIFO.set(byte as _);
+        if self.spi.cs.is_set(ControlStatus::TxReady::Read) {
+            self.spi
+                .fifo
+                .modify(Fifo::Data::Field::new(byte as _).unwrap());
             Ok(())
         } else {
             Err(nb::Error::WouldBlock)
@@ -198,16 +206,16 @@ impl<PINS> spi::FullDuplex<u8> for Spi<SPI0, PINS> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Error> {
-        self.spi.CS.modify(CS::TA::SET);
+        self.spi.cs.modify(ControlStatus::TransferActive::Set);
         let ret = self.rx();
-        self.spi.CS.modify(CS::TA::CLEAR);
+        self.spi.cs.modify(ControlStatus::TransferActive::Clear);
         ret
     }
 
     fn send(&mut self, byte: u8) -> nb::Result<(), Error> {
-        self.spi.CS.modify(CS::TA::SET);
+        self.spi.cs.modify(ControlStatus::TransferActive::Set);
         let ret = self.tx(byte);
-        self.spi.CS.modify(CS::TA::CLEAR);
+        self.spi.cs.modify(ControlStatus::TransferActive::Clear);
         ret
     }
 }
@@ -216,14 +224,14 @@ impl<PINS> crate::hal::blocking::spi::Transfer<u8> for Spi<SPI0, PINS> {
     type Error = Error;
 
     fn transfer<'w>(&mut self, words: &'w mut [u8]) -> Result<&'w [u8], Error> {
-        self.spi.CS.modify(CS::TA::SET);
+        self.spi.cs.modify(ControlStatus::TransferActive::Set);
 
         for word in words.iter_mut() {
             block!(self.tx(word.clone()))?;
             *word = block!(self.rx())?;
         }
 
-        self.spi.CS.modify(CS::TA::CLEAR);
+        self.spi.cs.modify(ControlStatus::TransferActive::Clear);
         Ok(words)
     }
 }
@@ -232,14 +240,14 @@ impl<PINS> crate::hal::blocking::spi::Write<u8> for Spi<SPI0, PINS> {
     type Error = Error;
 
     fn write(&mut self, words: &[u8]) -> Result<(), Error> {
-        self.spi.CS.modify(CS::TA::SET);
+        self.spi.cs.modify(ControlStatus::TransferActive::Set);
 
         for word in words {
             block!(self.tx(word.clone()))?;
             block!(self.rx())?;
         }
 
-        self.spi.CS.modify(CS::TA::CLEAR);
+        self.spi.cs.modify(ControlStatus::TransferActive::Clear);
         Ok(())
     }
 }

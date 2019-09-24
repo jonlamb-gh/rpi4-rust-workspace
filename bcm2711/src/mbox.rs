@@ -3,29 +3,46 @@
 use crate::MMIO_BASE;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use register::{mmio::ReadOnly, mmio::WriteOnly, register_bitfields};
 
 pub const BASE_PADDR: usize = MMIO_BASE + 0xB000;
 pub const BASE_OFFSET: usize = 0x0880;
 pub const PADDR: usize = BASE_PADDR + BASE_OFFSET;
 
-register_bitfields! {
+register! {
+    ReadAddr,
     u32,
-
-    STATUS [
-        FULL  OFFSET(31) NUMBITS(1) [],
-        EMPTY OFFSET(30) NUMBITS(1) []
+    RO,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
     ]
 }
 
-#[allow(non_snake_case)]
+register! {
+    Status,
+    u32,
+    RO,
+    Fields [
+        Empty WIDTH(U1) OFFSET(U30),
+        Full WIDTH(U1) OFFSET(U31),
+    ]
+}
+
+register! {
+    WriteAddr,
+    u32,
+    WO,
+    Fields [
+        Addr WIDTH(U32) OFFSET(U0),
+    ]
+}
+
 #[repr(C)]
 pub struct RegisterBlock {
-    pub READ: ReadOnly<u32>,                     // 0x00
-    __reserved_0: [u32; 5],                      // 0x04
-    pub STATUS: ReadOnly<u32, STATUS::Register>, // 0x18
-    __reserved_1: u32,                           // 0x1C
-    pub WRITE: WriteOnly<u32>,                   // 0x20
+    pub read_addr: ReadAddr::Register,   // 0x00
+    __reserved_0: [u32; 5],              // 0x04
+    pub status: Status::Register,        // 0x018
+    __reserved_1: u32,                   // 0x1C
+    pub write_addr: WriteAddr::Register, // 0x20
 }
 
 pub struct MBOX {
