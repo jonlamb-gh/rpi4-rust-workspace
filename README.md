@@ -25,6 +25,13 @@ https://gitlab.com/philmd/qemu/commits/raspi4_wip
 qemu-system-aarch64 -M raspi4 -nographic -serial null -serial mon:stdio -kernel /path/to/binary
 ```
 
+TODO - cusomer runner / `cargo xrun` support:
+
+```toml
+[target.'cfg(target_os = "none")']
+runner = "tools/qemu-runner"
+```
+
 ## U-boot
 
 Using 64 bit U-boot:
@@ -45,11 +52,40 @@ GNU ld (Linaro_Binutils-2018.05) 2.28.2.20170706
 ```
 
 Environment:
-TODO
 
-## SD card
+```bash
+setenv imgname img.bin
 
-TODO
+# Normally for bare metal
+#setenv loadaddr 0x80000
+
+# Put it somewhere else, so we don't overwrite u-boot
+setenv loadaddr 0x01000000
+
+# Disable data cache because u-boot turns it on
+setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
+```
+
+## SD Card
+
+Files:
+
+```bash
+/card
+├── config.txt
+├── fixup4.dat
+├── start4.elf
+├── u-boot.bin
+└── uboot.env
+```
+
+Contents of `config.txt`:
+
+```bash
+enable_uart=1
+arm_64bit=1
+kernel=u-boot.bin
+```
 
 ## Links
 
