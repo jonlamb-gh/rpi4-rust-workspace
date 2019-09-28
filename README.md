@@ -61,8 +61,47 @@ setenv imgname img.bin
 # Put it somewhere else, so we don't overwrite u-boot
 setenv loadaddr 0x01000000
 
-# Disable data cache because u-boot turns it on
-setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
+# NOTE: once u-boot ethernet driver is available, for now using kermit over serial
+# Disable data cache because u-boot turns it on and my stuff isn't ready for it
+#setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
+
+# Boot command for the kermit script
+setenv bootcmd 'dcache flush; dcache off; go ${loadaddr}'
+```
+
+Kermit upload script:
+
+```bash
+#!/usr/bin/kermit
+
+set line /dev/ttyUSB0
+set speed 115200
+set serial 8n1
+
+set flow-control none
+set file type bin
+set carrier-watch off
+set prefixing all
+set modem none
+set handshake none
+robust
+set delay 1
+
+echo "Prepared to boot new kernel. Reset the board now."
+
+input 60 "Hit any key to stop autoboot"
+output " "
+input 5 "U-Boot>"
+lineout "loadb"
+
+send /tmp/img.bin
+input 5 "U-Boot>"
+
+# Expects
+# setenv bootcmd 'dcache flush; dcache off; go ${loadaddr}'
+lineout "boot"
+
+connect
 ```
 
 ## SD Card
