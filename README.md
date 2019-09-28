@@ -43,8 +43,7 @@ ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make
 ```
 
 ```bash
-U-Boot> version
-U-Boot 2018.11-g208ecba (Nov 14 2018 - 13:17:50 -0800)
+U-Boot 2019.10-rc4-00004-g1f3910d (Sep 26 2019 - 18:01:19 -0700)
 
 aarch64-linux-gnu-gcc (Linaro GCC 7.3-2018.05) 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ec
 fbc167ef90065c0eeb7f91977701]
@@ -97,3 +96,5 @@ kernel=u-boot.bin
 - [bcm2711-rpi-4-b.dtb](https://github.com/Hexxeh/rpi-firmware/blob/master/bcm2711-rpi-4-b.dtb)
 - [Linux GENET drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet/broadcom/genet)
 - [More info on RPi4](https://www.raspberrypi.org/forums/viewtopic.php?t=244479&start=25)
+- [U-boot load over serial with kermit](http://blog.mezeske.com/?p=483)
+- [My RPi3 workspace](https://github.com/jonlamb-gh/rpi3-rust-workspace)
