@@ -136,4 +136,5 @@ kernel=u-boot.bin
 - [Linux GENET drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet/broadcom/genet)
 - [More info on RPi4](https://www.raspberrypi.org/forums/viewtopic.php?t=244479&start=25)
 - [U-boot load over serial with kermit](http://blog.mezeske.com/?p=483)
+- [Inside the RPi4 article, has some Eth specs/etc](https://cdn.shopify.com/s/files/1/1560/1473/files/Inside_Raspberry_Pi_4.pdf)
 - [My RPi3 workspace](https://github.com/jonlamb-gh/rpi3-rust-workspace)

@@ -37,6 +37,7 @@ impl From<Channel> for u32 {
         c as u32
     }
 }
+
 #[repr(align(16))]
 pub struct MailboxBuffer(
     // The address for buffer needs to be 16-byte aligned so that the
