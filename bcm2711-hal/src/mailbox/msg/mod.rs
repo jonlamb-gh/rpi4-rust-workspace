@@ -1,8 +1,12 @@
 //! VideoCore Mailbox messages and utilities
 
+// TODO - redo this with a trait and default impl so less is duplicated in each
+// msg lots of duplicate code in here too
+
 mod alloc_framebuffer;
 mod get_arm_mem;
 mod get_clock_rate;
+mod get_mac_address;
 mod get_serial_num;
 mod get_temp;
 mod get_vc_mem;
@@ -19,6 +23,9 @@ pub use self::alloc_framebuffer::{
 pub use self::get_arm_mem::{Repr as GetArmMemRepr, Req as GetArmMemReq, Resp as GetArmMemResp};
 pub use self::get_clock_rate::{
     Repr as GetClockRateRepr, Req as GetClockRateReq, Resp as GetClockRateResp,
+};
+pub use self::get_mac_address::{
+    Repr as GetMacAddressRepr, Req as GetMacAddressReq, Resp as GetMacAddressResp,
 };
 pub use self::get_serial_num::{
     Repr as GetSerialNumRepr, Req as GetSerialNumReq, Resp as GetSerialNumResp,
@@ -62,6 +69,7 @@ pub enum ReqMsg {
     GetArmMem(GetArmMemRepr),
     GetVcMem(GetVcMemRepr),
     GetClockRate(GetClockRateRepr),
+    GetMacAddress(GetMacAddressRepr),
     GetSerialNum(GetSerialNumRepr),
     AllocFramebuffer(AllocFramebufferRepr),
 }
@@ -72,6 +80,7 @@ pub enum RespMsg {
     GetArmMem(GetArmMemRepr),
     GetVcMem(GetVcMemRepr),
     GetClockRate(GetClockRateRepr),
+    GetMacAddress(GetMacAddressRepr),
     GetSerialNum(GetSerialNumRepr),
     AllocFramebuffer(AllocFramebufferRepr),
 }
@@ -196,6 +205,9 @@ impl<'a, T: AsRef<[u32]> + ?Sized> TryFrom<Msg<&'a T>> for RespMsg {
             TagId::GetArmMem => Ok(RespMsg::GetArmMem(GetArmMemRepr::parse_response(&m)?)),
             TagId::GetVcMem => Ok(RespMsg::GetVcMem(GetVcMemRepr::parse_response(&m)?)),
             TagId::GetClockRate => Ok(RespMsg::GetClockRate(GetClockRateRepr::parse_response(&m)?)),
+            TagId::GetMacAddress => Ok(RespMsg::GetMacAddress(GetMacAddressRepr::parse_response(
+                &m,
+            )?)),
             TagId::GetSerialNum => Ok(RespMsg::GetSerialNum(GetSerialNumRepr::parse_response(&m)?)),
             // TODO - frame buffer currently just matches on the first TagId
             TagId::SetPhySize => Ok(RespMsg::AllocFramebuffer(
@@ -224,6 +236,7 @@ impl MsgEmitter for &ReqMsg {
             ReqMsg::GetArmMem(repr) => repr.msg_size(),
             ReqMsg::GetVcMem(repr) => repr.msg_size(),
             ReqMsg::GetClockRate(repr) => repr.msg_size(),
+            ReqMsg::GetMacAddress(repr) => repr.msg_size(),
             ReqMsg::GetSerialNum(repr) => repr.msg_size(),
             ReqMsg::AllocFramebuffer(repr) => repr.msg_size(),
         }
@@ -234,6 +247,7 @@ impl MsgEmitter for &ReqMsg {
             ReqMsg::GetTemp(repr) => repr.emit_msg(msg),
             ReqMsg::GetArmMem(repr) => repr.emit_msg(msg),
             ReqMsg::GetVcMem(repr) => repr.emit_msg(msg),
+            ReqMsg::GetMacAddress(repr) => repr.emit_msg(msg),
             ReqMsg::GetSerialNum(repr) => repr.emit_msg(msg),
             ReqMsg::GetClockRate(repr) => repr.emit_msg(msg),
             ReqMsg::AllocFramebuffer(repr) => repr.emit_msg(msg),

@@ -35,6 +35,9 @@ fn kernel_entry() -> ! {
     let sn = get_serial_number(&mut mbox).serial_number();
     writeln!(serial, "Serial number: {:#010X}", sn).ok();
 
+    let mac_addr = *get_mac_address(&mut mbox).mac_address();
+    writeln!(serial, "MAC address: {:#?}", mac_addr).ok();
+
     let arm_mem = get_arm_mem(&mut mbox);
 
     writeln!(
@@ -88,6 +91,18 @@ fn get_serial_number(mbox: &mut Mailbox) -> GetSerialNumRepr {
         .expect("MBox call()");
 
     if let RespMsg::GetSerialNum(repr) = resp {
+        repr
+    } else {
+        panic!("Invalid response\n{:#?}", resp);
+    }
+}
+
+fn get_mac_address(mbox: &mut Mailbox) -> GetMacAddressRepr {
+    let resp = mbox
+        .call(Channel::Prop, &GetMacAddressRepr::default())
+        .expect("MBox call()");
+
+    if let RespMsg::GetMacAddress(repr) = resp {
         repr
     } else {
         panic!("Invalid response\n{:#?}", resp);

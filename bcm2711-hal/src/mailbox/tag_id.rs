@@ -1,10 +1,12 @@
 use crate::mailbox::Error;
 use core::convert::TryFrom;
 
+// TODO - GetMacAddress
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TagId {
     Last = 0x0000_0000,
     SetCursorState = 0x0000_8011,
+    GetMacAddress = 0x0001_0003,
     GetSerialNum = 0x0001_0004,
     GetArmMem = 0x0001_0005,
     GetVcMem = 0x0001_0006,
@@ -33,6 +35,7 @@ impl TryFrom<u32> for TagId {
         match value {
             0x0000_0000 => Ok(TagId::Last),
             0x0000_8011 => Ok(TagId::SetCursorState),
+            0x0001_0003 => Ok(TagId::GetMacAddress),
             0x0001_0004 => Ok(TagId::GetSerialNum),
             0x0001_0005 => Ok(TagId::GetArmMem),
             0x0001_0006 => Ok(TagId::GetVcMem),
