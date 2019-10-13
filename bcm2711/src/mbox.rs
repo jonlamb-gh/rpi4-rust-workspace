@@ -40,7 +40,7 @@ register! {
 pub struct RegisterBlock {
     pub read_addr: ReadAddr::Register,   // 0x00
     __reserved_0: [u32; 5],              // 0x04
-    pub status: Status::Register,        // 0x018
+    pub status: Status::Register,        // 0x18
     __reserved_1: u32,                   // 0x1C
     pub write_addr: WriteAddr::Register, // 0x20
 }

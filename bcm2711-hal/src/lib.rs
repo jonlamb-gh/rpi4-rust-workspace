@@ -8,6 +8,7 @@ pub mod cache;
 pub mod clocks;
 pub mod delay;
 pub mod dma;
+pub mod eth;
 pub mod gpio;
 pub mod mailbox;
 pub mod prelude;
