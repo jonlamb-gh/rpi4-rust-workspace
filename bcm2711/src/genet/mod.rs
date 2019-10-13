@@ -8,7 +8,9 @@ pub mod intrl2_0;
 pub mod intrl2_1;
 pub mod mdio;
 pub mod rbuf;
+pub mod rx_desc;
 pub mod rx_dma;
+pub mod rx_ring;
 pub mod sys;
 pub mod umac;
 
@@ -26,22 +28,6 @@ pub const MDIO_PADDR: usize = PADDR + 0x0E14;
 
 pub const RX_DMA_PADDR: usize = PADDR + RX_DMA_OFFSET;
 
-/// Max of 16 priority queues and 1 default queue
-pub const DESC_INDEX: usize = 16;
-
-/// Each DMA descriptor is 3 words (12 bytes)
-pub const DMA_DESC_WORDS: usize = 3;
-pub const DMA_DESC_SIZE: usize = DMA_DESC_WORDS * 4;
-
-/// Number of DMA descriptors, same for Rx/Tx
-pub const NUM_DMA_DESC: usize = 256;
-
-/// DMA ring size
-pub const DMA_RING_SIZE: usize = 0x40;
-
-/// Total size of DMA rings
-pub const DMA_RINGS_SIZE: usize = DMA_RING_SIZE * (DESC_INDEX + 1);
-
 /// Rx DMA block offset from base `PADDR`
 /// * registers for the 256 descriptors
 /// * registers for the 17 rings
@@ -54,8 +40,21 @@ pub const RX_DMA_OFFSET: usize = 0x2000;
 /// * DMA control/status registers
 pub const TX_DMA_OFFSET: usize = 0x4000;
 
-/// Rx DMA registers offset from base `PADDR`
-pub const RX_DMA_REGS_OFFSET: usize = RX_DMA_OFFSET + (NUM_DMA_DESC * DMA_DESC_SIZE);
+/// Number of DMA descriptor rings, same for Rx/Tx
+pub const NUM_DMA_RINGS: usize = 17;
 
-/// Tx DMA registers offset from base `PADDR`
-pub const TX_DMA_REGS_OFFSET: usize = TX_DMA_OFFSET + (NUM_DMA_DESC * DMA_DESC_SIZE);
+/// Max of 16 priority queues and 1 default queue
+pub const DESC_INDEX: usize = 16;
+
+/// Each DMA descriptor is 3 words (12 bytes)
+pub const DMA_DESC_WORDS: usize = 3;
+pub const DMA_DESC_SIZE: usize = DMA_DESC_WORDS * 4;
+
+/// Number of DMA descriptors, same for Rx/Tx
+pub const NUM_DMA_DESC: usize = 256;
+
+/// DMA rings are 64 bytes
+pub const DMA_RING_SIZE: usize = 0x40;
+
+/// Total size of DMA rings
+pub const DMA_RINGS_SIZE: usize = DMA_RING_SIZE * NUM_DMA_RINGS;

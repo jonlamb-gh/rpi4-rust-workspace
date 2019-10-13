@@ -1,11 +1,16 @@
-use crate::genet::NUM_DMA_DESC;
-use crate::genet::RX_DMA_PADDR;
+use crate::genet::rx_desc::RxDescriptor;
+use crate::genet::rx_ring::RxRing;
+use crate::genet::{NUM_DMA_DESC, NUM_DMA_RINGS, RX_DMA_PADDR};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
-// TODO - field defs
+// TODO
+// - maybe break apart the regions
+// - some of the regs overlap, like DMA_ARB_CTRL and DMA_RING0_TIMEOUT
+// - field defs
+
 register! {
-    LenStatus,
+    RingCfg,
     u32,
     RW,
     Fields [
@@ -14,7 +19,7 @@ register! {
 }
 
 register! {
-    AddrLow,
+    Ctrl,
     u32,
     RW,
     Fields [
@@ -23,7 +28,7 @@ register! {
 }
 
 register! {
-    AddrHigh,
+    Status,
     u32,
     RW,
     Fields [
@@ -31,16 +36,82 @@ register! {
     ]
 }
 
-#[repr(C)]
-pub struct RxDescriptor {
-    pub len_status: LenStatus::Register, // 0x00
-    pub addr_low: AddrLow::Register,     // 0x04
-    pub addr_high: AddrHigh::Register,   // 0x08
+register! {
+    BurstSize,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
 }
 
+register! {
+    ArbCtrl,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+        Mode WIDTH(U2) OFFSET(U0) [
+            Rr  = U0,
+            Wrr = U1,
+            Sp  = U2
+        ],
+    ]
+}
+
+register! {
+    Priority0,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
+    Priority1,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
+    Priority2,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+register! {
+    Index2Ring,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
+}
+
+pub const NUM_INDEX2RINGS: usize = 8;
+
+// NOTE: skiping RING0-16_TIMEOUT (__reserved_1) for now
 #[repr(C)]
 pub struct RegisterBlock {
-    pub descriptors: [RxDescriptor; NUM_DMA_DESC],
+    pub descriptors: [RxDescriptor; NUM_DMA_DESC], // 0x0000
+    pub rings: [RxRing; NUM_DMA_RINGS],            // 0x0C00
+    pub ring_cfg: RingCfg::Register,               // 0x1040
+    pub status: Status::Register,                  // 0x1048
+    pub burst_size: BurstSize::Register,           // 0x104C
+    __reserved_0: [u32; 7],                        // 0x1050
+    pub arb_ctrl: ArbCtrl::Register,               // 0x106C
+    pub priority_0: Priority0::Register,           // 0x1070
+    pub priority_1: Priority1::Register,           // 0x1074
+    pub priority_2: Priority2::Register,           // 0x1078
+    __reserved_1: [u32; 13],                       // 0x107C
+    pub index2rings: [Index2Ring::Register; NUM_INDEX2RINGS], // 0x10B0
 }
 
 pub struct RXDMA {
