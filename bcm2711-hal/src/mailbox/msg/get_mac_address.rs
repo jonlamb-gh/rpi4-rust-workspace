@@ -1,4 +1,5 @@
 use crate::mailbox::{Error, Msg, MsgEmitter, ReqRespCode, Result, Tag, TagId, LAST_TAG_SIZE};
+use core::fmt;
 
 const TAG: TagId = TagId::GetMacAddress;
 
@@ -108,6 +109,17 @@ impl Default for Repr {
         Repr {
             mac_address: [0; 6],
         }
+    }
+}
+
+impl fmt::Display for Repr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let bytes = self.mac_address;
+        write!(
+            f,
+            "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]
+        )
     }
 }
 

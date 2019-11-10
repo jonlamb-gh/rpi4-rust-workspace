@@ -1,6 +1,6 @@
-use crate::genet::rx_desc::RxDescriptor;
-use crate::genet::rx_ring::RxRing;
-use crate::genet::{NUM_DMA_DESC, NUM_DMA_RINGS, RX_DMA_PADDR};
+use crate::genet::tx_desc::TxDescriptor;
+use crate::genet::tx_ring::TxRing;
+use crate::genet::{NUM_DMA_DESC, NUM_DMA_RINGS, TX_DMA_PADDR};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
@@ -54,12 +54,13 @@ register! {
     u32,
     RW,
     Fields [
-        Bits WIDTH(U32) OFFSET(U0),
         Mode WIDTH(U2) OFFSET(U0) [
             Rr  = U0,
             Wrr = U1,
             Sp  = U2
         ],
+        // TODO - not sure this is true
+        RingBufPrio WIDTH(U5) OFFSET(U5),
     ]
 }
 
@@ -104,8 +105,8 @@ pub const NUM_INDEX2RINGS: usize = 8;
 // NOTE: skiping RING0-16_TIMEOUT (__reserved_1) for now
 #[repr(C)]
 pub struct RegisterBlock {
-    pub descriptors: [RxDescriptor; NUM_DMA_DESC], // 0x0000
-    pub rings: [RxRing; NUM_DMA_RINGS],            // 0x0C00
+    pub descriptors: [TxDescriptor; NUM_DMA_DESC], // 0x0000
+    pub rings: [TxRing; NUM_DMA_RINGS],            // 0x0C00
     pub ring_cfg: RingCfg::Register,               // 0x1040
     pub ctrl: Ctrl::Register,                      // 0x1044
     pub status: Status::Register,                  // 0x1048
@@ -119,13 +120,13 @@ pub struct RegisterBlock {
     pub index2rings: [Index2Ring::Register; NUM_INDEX2RINGS], // 0x10B0
 }
 
-pub struct RXDMA {
+pub struct TXDMA {
     _marker: PhantomData<*const ()>,
 }
 
-unsafe impl Send for RXDMA {}
+unsafe impl Send for TXDMA {}
 
-impl RXDMA {
+impl TXDMA {
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
@@ -133,22 +134,22 @@ impl RXDMA {
     }
 
     pub fn as_ptr(&self) -> *const RegisterBlock {
-        RX_DMA_PADDR as *const _
+        TX_DMA_PADDR as *const _
     }
 
     pub fn as_mut_ptr(&mut self) -> *mut RegisterBlock {
-        RX_DMA_PADDR as *mut _
+        TX_DMA_PADDR as *mut _
     }
 }
 
-impl Deref for RXDMA {
+impl Deref for TXDMA {
     type Target = RegisterBlock;
     fn deref(&self) -> &RegisterBlock {
         unsafe { &*self.as_ptr() }
     }
 }
 
-impl DerefMut for RXDMA {
+impl DerefMut for TXDMA {
     fn deref_mut(&mut self) -> &mut RegisterBlock {
         unsafe { &mut *self.as_mut_ptr() }
     }

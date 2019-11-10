@@ -15,7 +15,6 @@ register! {
 
 pub const NUM_FILTERS: usize = 48;
 
-// bits/bytes?
 pub const FILTER_SIZE: usize = 128;
 
 #[repr(C)]

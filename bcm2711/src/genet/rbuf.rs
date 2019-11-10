@@ -13,9 +13,45 @@ register! {
     ]
 }
 
+register! {
+    Status,
+    u32,
+    RW,
+    Fields [
+        WakeOverLan WIDTH(U1) OFFSET(U0),
+        MpdIntrActive WIDTH(U1) OFFSET(U1),
+        AcpiIntrActive WIDTH(U1) OFFSET(U2),
+    ]
+}
+
+register! {
+    ChkCtrl,
+    u32,
+    RW,
+    Fields [
+        RxChkEnable WIDTH(U1) OFFSET(U0),
+        SkipFcs WIDTH(U1) OFFSET(U4),
+    ]
+}
+
+register! {
+    TBufSizeCtrl,
+    u32,
+    RW,
+    Fields [
+        Bits WIDTH(U32) OFFSET(U0),
+    ]
+}
+
 #[repr(C)]
 pub struct RegisterBlock {
-    pub ctrl: Ctrl::Register, // 0x00
+    pub ctrl: Ctrl::Register,                   // 0x00
+    __reserved_0: [u32; 2],                     // 0x04
+    pub status: Status::Register,               // 0x0C
+    __reserved_1: u32,                          // 0x10
+    pub chk_ctrl: ChkCtrl::Register,            // 0x14
+    __reserved_2: [u32; 39],                    // 0x18
+    pub tbuf_size_ctrl: TBufSizeCtrl::Register, // 0xB4
 }
 
 pub struct RBUF {

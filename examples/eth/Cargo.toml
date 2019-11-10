@@ -1,0 +1,14 @@
+[package]
+name = "eth"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../../bcm2711-hal" }
+arr_macro = "0.1"
+
+[dependencies.raspi3_boot]
+path = "../../raspi3_boot"
+default-features = false
+features = ["panic-uart1"]
