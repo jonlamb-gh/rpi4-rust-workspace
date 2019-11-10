@@ -12,6 +12,20 @@
 // - dropped/fragmented frames (remove the panics)
 // - old discards handling logic in dma_recv
 // - add log macro statements for debugging
+// - dma/cache ops once caches are enabled
+// - padding of user pkt in transmit path
+//
+// - tx isn't working yet
+// - needs the InterruptHandler0, tx_reclaim() logic
+//
+//
+// Issues
+// - after a while, rx starts returing "Eth Error Fragmented"
+//   * seems to do that for a while, then eventually get normal
+//   ok frames
+//   might just be some crap on my network?
+//
+// - sending l2 frames from my desktop, don't always get recv'd?
 
 mod address;
 mod control_block;
@@ -43,6 +57,7 @@ const LEADING_PAD: usize = 2;
 const FCS_LEN: usize = 4;
 
 pub const MAX_MTU_SIZE: usize = 1536;
+pub const MIN_MTU_SIZE: usize = 60;
 pub const RX_BUF_LENGTH: usize = 2048;
 
 /// Control blocks to manage the hw descriptors, same for Rx and Tx
@@ -90,6 +105,7 @@ pub enum Error {
     Fragmented,
     Malformed,
     Exhausted,
+    Dropped,
 }
 
 pub struct Eth {
@@ -214,8 +230,11 @@ impl Eth {
         self.mii_setup();
     }
 
-    // TODO result/error-handling
     pub fn recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
         self.dma_recv(pkt)
+    }
+
+    pub fn send(&mut self, pkt: &[u8]) -> Result<(), Error> {
+        self.dma_send(pkt)
     }
 }

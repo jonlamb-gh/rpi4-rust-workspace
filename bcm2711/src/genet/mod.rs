@@ -99,3 +99,7 @@ pub const DMA_FC_THRESH_LO: usize = 5;
 pub const Q0_PRIORITY: usize = 0;
 
 pub const DMA_RING_BUF_PRIORITY_SHIFT: usize = 5;
+
+// TODO - QTAG mask and shift overlap with other fields?
+pub const QTAG_MASK: u32 = 0x3F;
+pub const QTAG_SHIFT: usize = 7;

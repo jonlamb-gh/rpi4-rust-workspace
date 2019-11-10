@@ -1,11 +1,11 @@
-use crate::eth::{Error, Eth, FCS_LEN, LEADING_PAD, MAX_MTU_SIZE, RX_BUF_LENGTH};
+use crate::eth::{Error, Eth, FCS_LEN, LEADING_PAD, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH};
 use crate::prelude::*;
 use bcm2711::genet::umac::*;
-use bcm2711::genet::{rx_desc, rx_dma, rx_ring, tx_dma, tx_ring};
+use bcm2711::genet::{rx_desc, rx_dma, rx_ring, tx_desc, tx_dma, tx_ring};
 use bcm2711::genet::{
     DESC_INDEX, DMA_DESC_WORDS, DMA_FC_THRESH_HI, DMA_FC_THRESH_LO, DMA_MAX_BURST_LENGTH,
-    DMA_RING_BUF_PRIORITY_SHIFT, NUM_DMA_DESC, Q0_PRIORITY, Q16_RX_BD_CNT, RX_BDS_PER_Q, RX_QUEUES,
-    TX_BDS_PER_Q, TX_QUEUES,
+    DMA_RING_BUF_PRIORITY_SHIFT, NUM_DMA_DESC, Q0_PRIORITY, Q16_RX_BD_CNT, Q16_TX_BD_CNT,
+    QTAG_MASK, QTAG_SHIFT, RX_BDS_PER_Q, RX_QUEUES, TX_BDS_PER_Q, TX_QUEUES,
 };
 use core::convert::TryInto;
 
@@ -165,7 +165,7 @@ impl Eth {
         // CleanAndInvalidateDataCacheRange
 
         // Put the new Rx buffer on the ring
-        self.dmadesc_set_addr(desc_index, buffer_address);
+        self.dmadesc_rx_set_addr(desc_index, buffer_address);
     }
 
     // Initialize Tx queues
@@ -204,6 +204,12 @@ impl Eth {
         }
 
         // Initialize Tx default queue 16
+        self.init_tx_ring(
+            DESC_INDEX,
+            Q16_TX_BD_CNT,
+            TX_QUEUES * TX_BDS_PER_Q,
+            NUM_DMA_DESC,
+        );
         //enabled_buffers |= 1 << DESC_INDEX;
         dma_priority[prio_reg_index(DESC_INDEX)] |=
             (Q0_PRIORITY + TX_QUEUES) << prio_reg_shift(DESC_INDEX);
@@ -285,7 +291,7 @@ impl Eth {
             .write((end_index * (DMA_DESC_WORDS - 1)).try_into().unwrap());
     }
 
-    pub(crate) fn dmadesc_set_addr(&mut self, desc_index: usize, address: usize) {
+    pub fn dmadesc_rx_set_addr(&mut self, desc_index: usize, address: usize) {
         // TODO
         // Should use BUS_ADDRESS() here, but does not work
         self.dev.rdma.descriptors[desc_index]
@@ -297,6 +303,20 @@ impl Eth {
         // the platform is explicitly configured for 64-bits/LPAE.
         // TODO: write DMA_DESC_ADDRESS_HI only once
         self.dev.rdma.descriptors[desc_index].addr_high.write(0);
+    }
+
+    pub fn dmadesc_tx_set_addr(&mut self, desc_index: usize, address: usize) {
+        // TODO
+        // Should use BUS_ADDRESS() here, but does not work
+        self.dev.tdma.descriptors[desc_index]
+            .addr_low
+            .write(address as _);
+
+        // Register writes to GISB bus can take couple hundred nanoseconds
+        // and are done for each packet, save these expensive writes unless
+        // the platform is explicitly configured for 64-bits/LPAE.
+        // TODO: write DMA_DESC_ADDRESS_HI only once
+        self.dev.tdma.descriptors[desc_index].addr_high.write(0);
     }
 
     // TODO result/error-handling
@@ -400,5 +420,85 @@ impl Eth {
         }
 
         result
+    }
+
+    // TODO - need to port the logic from InterruptHandler0/etc
+    // tx_reclaim() stuff
+    pub(crate) fn dma_send(&mut self, pkt: &[u8]) -> Result<(), Error> {
+        if pkt.len() > MAX_MTU_SIZE {
+            return Err(Error::Exhausted);
+        } else if pkt.len() < MIN_MTU_SIZE {
+            return Err(Error::Dropped);
+        }
+
+        // Mapping strategy:
+        // index = 0, unclassified, packet xmited through ring16
+        // index = 1, goes to ring 0. (highest priority queue)
+        // index = 2, goes to ring 1.
+        // index = 3, goes to ring 2.
+        // index = 4, goes to ring 3.
+        //
+        // Choosing ring16, because it has more buffers than ring0-3
+        let r_index = 0;
+
+        let index = if r_index == 0 {
+            DESC_INDEX
+        } else {
+            r_index - 1
+        };
+
+        let ring = &mut self.tx_rings[index];
+
+        if ring.free_bds < 2 {
+            Err(Error::Dropped)
+        } else {
+            // TODO - padding of user frame to MIN_MTU_SIZE
+
+            // get_txcb()
+            let cb_index = ring.write_ptr - ring.cb_ptr;
+            let cb = &mut self.tx_cbs[cb_index];
+            // Advance local write pointer
+            if ring.write_ptr == ring.end_ptr {
+                ring.write_ptr = ring.cb_ptr;
+            } else {
+                ring.write_ptr += 1;
+            }
+
+            // TODO - caches are disabled for now
+            // Prepare for DMA
+            //CleanAndInvalidateDataCacheRange ((u32) (uintptr) pTxBuffer, nLength);
+
+            // Set DMA buffer in Tx control block
+            let pkt_len = pkt.len();
+            cb.buffer[..pkt_len].copy_from_slice(pkt);
+
+            // Set DMA descriptor and start transfer
+            let desc_index = cb.desc_index;
+            let buffer_address = cb.buffer.as_ptr() as usize;
+            self.dmadesc_tx_set_addr(desc_index, buffer_address);
+
+            // TODO - QTAG mask and shift overlap with other fields?
+            self.dev.tdma.descriptors[desc_index]
+                .len_status
+                .write(QTAG_MASK << QTAG_SHIFT);
+            self.dev.tdma.descriptors[desc_index].len_status.modify(
+                tx_desc::LenStatus::Len::Field::new(pkt_len as _).unwrap()
+                    + tx_desc::LenStatus::TxAppendCrc::Set
+                    + tx_desc::LenStatus::Sop::Set
+                    + tx_desc::LenStatus::Eop::Set,
+            );
+
+            // Decrement total BD count and advance our write pointer
+            self.tx_rings[index].free_bds -= 1;
+            self.tx_rings[index].prod_index += 1;
+            self.tx_rings[index].prod_index &= 0xFFFF;
+
+            // Packets are ready, update producer index
+            self.dev.tdma.rings[index]
+                .prod_index
+                .write(self.tx_rings[index].prod_index as _);
+
+            Ok(())
+        }
     }
 }

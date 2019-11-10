@@ -3,6 +3,8 @@ register! {
     u32,
     RW,
     Fields [
+        // TODO - QTAG mask and shift seem to overlap with these?
+        //
         // Tx specific fields
         TxDoCSum WIDTH(U1) OFFSET(U4),
         TxOwCrc WIDTH(U1) OFFSET(U5),
