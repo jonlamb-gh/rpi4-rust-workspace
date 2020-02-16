@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Monitors UART1
+qemu-system-aarch64 -M raspi4 -nographic -serial null -serial mon:stdio -semihosting -kernel $@
+
+exit $?

@@ -235,6 +235,14 @@ impl Eth {
     }
 
     pub fn send(&mut self, pkt: &[u8]) -> Result<(), Error> {
-        self.dma_send(pkt)
+        self.dma_send(pkt)?;
+
+        // TODO - poll for completion for now
+        loop {
+            self.intr_handler0();
+            self.intr_handler1();
+        }
+
+        Ok(())
     }
 }

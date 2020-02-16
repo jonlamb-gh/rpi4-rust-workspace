@@ -81,6 +81,10 @@ fn kernel_entry() -> ! {
     writeln!(serial, "link up: {}", eth.link_up()).ok();
     writeln!(serial, "link speed: {}", eth.link_speed()).ok();
 
+    // TODO some tx fixes in the git history
+    // https://github.com/torvalds/linux/commits/master/drivers/net/ethernet/broadcom/genet
+    TODO
+
     // Wait for link to be up
     loop {
         if eth.link_up() {
@@ -91,7 +95,7 @@ fn kernel_entry() -> ! {
         // update_phy()
     }
 
-    writeln!(serial, "Send loop").ok();
+    //writeln!(serial, "Send loop").ok();
 
     let forged_pkt: [u8; 60] = [
         0x3C, 0xE1, 0xA1, 0x4E, 0x48, 0x5C, 0xDC, 0xA6, 0x32, 0x2D, 0xD7, 0x6C, 0x88, 0x74, 0xE2,
@@ -100,9 +104,9 @@ fn kernel_entry() -> ! {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
-    for _ in 0..10 {
-        eth.send(&forged_pkt).unwrap();
-    }
+    //for _ in 0..10 {
+    //    eth.send(&forged_pkt).unwrap();
+    //}
 
     writeln!(serial, "Recv loop").ok();
 
@@ -115,6 +119,9 @@ fn kernel_entry() -> ! {
                         write!(serial, "{:02X} ", pkt_buffer[b]).ok();
                     }
                     write!(serial, "\n").ok().unwrap();
+
+                    writeln!(serial, "Sending forged pkt {} bytes", forged_pkt.len()).ok();
+                    eth.send(&forged_pkt).unwrap();
                 }
             }
             Err(e) => writeln!(serial, "Eth Error {:?}", e).ok().unwrap(),

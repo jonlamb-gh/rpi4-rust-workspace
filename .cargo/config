@@ -7,3 +7,6 @@ rustflags = [
 
 [build]
 target = "aarch64-unknown-none"
+
+[target.'cfg(target_os = "none")']
+runner = "tools/qemu-runner"
