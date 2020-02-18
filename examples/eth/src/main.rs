@@ -40,24 +40,9 @@ fn kernel_entry() -> ! {
     let eth_devices = Devices::new();
 
     // TODO - just putting these massive blobs in the bss for now
-    let rx_cbs = unsafe {
-        static mut RX_CBS: ControlBlocks = arr![ControlBlock::zero(); 256];
-        &mut RX_CBS[..]
-    };
-
-    let tx_cbs = unsafe {
-        static mut TX_CBS: ControlBlocks = arr![ControlBlock::zero(); 256];
-        &mut TX_CBS[..]
-    };
-
-    let rx_rings = unsafe {
-        static mut RX_RINGS: RxRings = arr![RxRing::zero(); 17];
-        &mut RX_RINGS[..]
-    };
-
-    let tx_rings = unsafe {
-        static mut TX_RINGS: TxRings = arr![TxRing::zero(); 17];
-        &mut TX_RINGS[..]
+    let rx_descriptors = unsafe {
+        static mut RX_DESC: Descriptors = arr![Descriptor::zero(); 256];
+        &mut RX_DESC[..]
     };
 
     let mut pkt_buffer = unsafe {
@@ -65,37 +50,32 @@ fn kernel_entry() -> ! {
         &mut PKT[..]
     };
 
-    let mut eth = Eth::new(
-        eth_devices,
-        sys_counter,
-        mac_addr,
-        rx_cbs,
-        tx_cbs,
-        rx_rings,
-        tx_rings,
-    )
-    .unwrap();
+    let mut eth = Eth::new(eth_devices, sys_counter, mac_addr, rx_descriptors).unwrap();
 
     writeln!(serial, "Ethernet initialized").ok();
 
-    writeln!(serial, "link up: {}", eth.link_up()).ok();
-    writeln!(serial, "link speed: {}", eth.link_speed()).ok();
+    writeln!(serial, "Recv loop").ok();
 
-    // TODO some tx fixes in the git history
-    // https://github.com/torvalds/linux/commits/master/drivers/net/ethernet/broadcom/genet
-    TODO
-
-    // Wait for link to be up
-    loop {
-        if eth.link_up() {
-            break;
-        }
-
-        // TODO - wait ~2 seconds
-        // update_phy()
-    }
-
-    //writeln!(serial, "Send loop").ok();
+    // TODO - after a few minutes start getting nothing but Fragmented errors
+    // for about 1 minute
+    // then things start flowing again
+    // (check my sop / eop logic in dma_recv)
+    // (could also be my network...)
+    //
+    //00 80 00 D8 50 E6 CF 61 50 80 01 00 00 14 00 02 00 00 00 00 00 00 00 0E DE 00
+    // 1C Recv'd 60 bytes
+    //FF FF FF FF FF FF 01 80 C2 00 00 01 88 74 E1 B0 A6 7F 38 60 A0 27 BA AF 10 00
+    // 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+    // 00 00 00 00 00 00 00 00 00 00 Recv'd 60 bytes
+    //01 80 C2 00 00 00 D8 50 E6 CF 61 50 00 26 42 42 03 00 00 00 00 00 80 00 D8 50
+    // E6 CF 61 50 00 00 00 00 80 00 D8 50 E6 CF 61 50 80 01 00 00 14 00 02 00
+    // 00 00 00 00 00 00 0E DE 00 1C Eth Error Fragmented
+    //Eth Error Fragmented
+    //Eth Error Fragmented
+    //Eth Error Fragmented
+    //Eth Error Fragmented
+    //Eth Error Fragmented
+    // ...
 
     let forged_pkt: [u8; 60] = [
         0x3C, 0xE1, 0xA1, 0x4E, 0x48, 0x5C, 0xDC, 0xA6, 0x32, 0x2D, 0xD7, 0x6C, 0x88, 0x74, 0xE2,
@@ -103,12 +83,6 @@ fn kernel_entry() -> ! {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
-
-    //for _ in 0..10 {
-    //    eth.send(&forged_pkt).unwrap();
-    //}
-
-    writeln!(serial, "Recv loop").ok();
 
     loop {
         match eth.recv(&mut pkt_buffer) {
@@ -120,8 +94,9 @@ fn kernel_entry() -> ! {
                     }
                     write!(serial, "\n").ok().unwrap();
 
-                    writeln!(serial, "Sending forged pkt {} bytes", forged_pkt.len()).ok();
-                    eth.send(&forged_pkt).unwrap();
+                    //writeln!(serial, "Sending forged pkt {} bytes",
+                    // forged_pkt.len()).ok();
+                    // eth.send(&forged_pkt).unwrap();
                 }
             }
             Err(e) => writeln!(serial, "Eth Error {:?}", e).ok().unwrap(),

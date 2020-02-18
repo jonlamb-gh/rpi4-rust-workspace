@@ -52,7 +52,8 @@ impl Eth {
 
         self.dev.rbuf.tbuf_size_ctrl.write(1);
 
-        self.intr_disable();
+        // TODO
+        //self.intr_disable();
 
         // Enable MDIO interrupts on GENET v3+
         // NOTE: MDIO interrupts do not work

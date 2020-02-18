@@ -43,11 +43,10 @@ ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make
 ```
 
 ```bash
-U-Boot 2019.10-rc4-00004-g1f3910d (Sep 26 2019 - 18:01:19 -0700)
+U-Boot 2020.04-rc2-00048-gf2a73d6867 (Feb 16 2020 - 08:29:41 -0800)
 
-aarch64-linux-gnu-gcc (Linaro GCC 7.3-2018.05) 7.3.1 20180425 [linaro-7.3-2018.05 revision d29120a424ec
-fbc167ef90065c0eeb7f91977701]
-GNU ld (Linaro_Binutils-2018.05) 2.28.2.20170706
+aarch64-linux-gnu-gcc (Ubuntu/Linaro 8.3.0-6ubuntu1) 8.3.0
+GNU ld (GNU Binutils for Ubuntu) 2.32
 ```
 
 Environment:
@@ -59,49 +58,10 @@ setenv imgname img.bin
 #setenv loadaddr 0x80000
 
 # Put it somewhere else, so we don't overwrite u-boot
-setenv loadaddr 0x01000000
+setenv loadaddr 0x0100000
 
-# NOTE: once u-boot ethernet driver is available, for now using kermit over serial
 # Disable data cache because u-boot turns it on and my stuff isn't ready for it
-#setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
-
-# Boot command for the kermit script
-setenv bootcmd 'dcache flush; dcache off; go ${loadaddr}'
-```
-
-Kermit upload script:
-
-```bash
-#!/usr/bin/kermit
-
-set line /dev/ttyUSB0
-set speed 115200
-set serial 8n1
-
-set flow-control none
-set file type bin
-set carrier-watch off
-set prefixing all
-set modem none
-set handshake none
-robust
-set delay 1
-
-echo "Prepared to boot new kernel. Reset the board now."
-
-input 60 "Hit any key to stop autoboot"
-output " "
-input 5 "U-Boot>"
-lineout "loadb"
-
-send /tmp/img.bin
-input 5 "U-Boot>"
-
-# Expects
-# setenv bootcmd 'dcache flush; dcache off; go ${loadaddr}'
-lineout "boot"
-
-connect
+setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
 ```
 
 ## SD Card
@@ -134,6 +94,7 @@ kernel=u-boot.bin
 - [Bare-metal C++ code](https://github.com/rsta2/circle)
 - [bcm2711-rpi-4-b.dtb](https://github.com/Hexxeh/rpi-firmware/blob/master/bcm2711-rpi-4-b.dtb)
 - [Linux GENET drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet/broadcom/genet)
+- [U-boot GENET driver](https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c)
 - [More info on RPi4](https://www.raspberrypi.org/forums/viewtopic.php?t=244479&start=25)
 - [U-boot load over serial with kermit](http://blog.mezeske.com/?p=483)
 - [Inside the RPi4 article, has some Eth specs/etc](https://cdn.shopify.com/s/files/1/1560/1473/files/Inside_Raspberry_Pi_4.pdf)

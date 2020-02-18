@@ -1,70 +1,91 @@
 //! BCM54213PE Gigabit Ethernet driver
 //!
-//! Most of this implementation was based on work from the `rsta2/circle`
-//! project: https://github.com/rsta2/circle
+//! This implementation was based on:
+//! https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c
 
-// https://github.com/rsta2/circle/blob/master/lib/bcm54213.cpp#L606
-// https://github.com/torvalds/linux/blob/master/drivers/net/ethernet/broadcom/genet/bcmgenet.c
-
-// TODO
-// - checked fields
-// - error handling
-// - dropped/fragmented frames (remove the panics)
-// - old discards handling logic in dma_recv
-// - add log macro statements for debugging
-// - dma/cache ops once caches are enabled
-// - padding of user pkt in transmit path
+// https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c
 //
-// - tx isn't working yet
-// - needs the InterruptHandler0, tx_reclaim() logic
+// functions:
+// * bcmgenet_umac_reset
+// * bcmgenet_disable_dma
+// * bcmgenet_enable_dma
+// * invalidate_dcache_check
+// * bcmgenet_adjust_link
+// * bcmgenet_phy_init
+// * bcmgenet_interface_set
+// * bcmgenet_eth_probe
+// * bcmgenet_eth_ofdata_to_platdata
+// * rx_descs_init
+// * rx_ring_init
+// * tx_ring_init
 //
+// * bcmgenet_gmac_write_hwaddr
+// * bcmgenet_gmac_eth_send
+// * bcmgenet_gmac_eth_recv
+// * bcmgenet_gmac_free_pkt
+// * bcmgenet_gmac_eth_start
+// * bcmgenet_gmac_eth_stop
 //
-// Issues
-// - after a while, rx starts returing "Eth Error Fragmented"
-//   * seems to do that for a while, then eventually get normal
-//   ok frames
-//   might just be some crap on my network?
+// * bcmgenet_mdio_start
+// * bcmgenet_mdio_write
+// * bcmgenet_mdio_read
+// * bcmgenet_mdio_init
 //
-// - sending l2 frames from my desktop, don't always get recv'd?
+// structs:
+// * bcmgenet_eth_priv
+//   - holds an rx buffer, to be split up for the DMA ops
+// * bcmgenet_gmac_eth_ops
+// * bcmgenet_eth_ids
 
 mod address;
-mod control_block;
+mod descriptor;
 mod dma;
-mod hfb;
-mod intr;
 mod mdio;
 mod mii;
 mod netif;
 mod phy;
-mod rx_ring;
-mod tx_ring;
 mod umac;
 
+//mod control_block;
+//mod hfb;
+//mod intr;
+//mod rx_ring;
+//mod tx_ring;
+
 pub use crate::eth::address::EthernetAddress;
-pub use crate::eth::control_block::ControlBlock;
-pub use crate::eth::rx_ring::RxRing;
-pub use crate::eth::tx_ring::TxRing;
+pub use crate::eth::descriptor::Descriptor;
+pub use crate::eth::phy::Status as PhyStatus;
+
+//pub use crate::eth::control_block::ControlBlock;
+//pub use crate::eth::rx_ring::RxRing;
+//pub use crate::eth::tx_ring::TxRing;
 
 use crate::timer::SysCounter;
-use bcm2711::genet::umac::Cmd;
 use bcm2711::genet::*;
 
 const GENET_V5: u8 = 5;
 
-/// Hw adds 2 bytes for IP alignment
+// Hw adds 2 bytes for IP alignment
+// == RX_BUF_OFFSET
 const LEADING_PAD: usize = 2;
 
 const FCS_LEN: usize = 4;
 
+// Body(1500) + EH_SIZE(14) + VLANTAG(4) + BRCMTAG(6) + FCS(4) = 1528.
+// 1536 is multiple of 256 bytes
 pub const MAX_MTU_SIZE: usize = 1536;
+//pub const MAX_MTU_SIZE: usize =
+//    ETH_DATA_LEN + ETH_HLEN + VLAN_HLEN + ENET_BRCM_TAG_LEN + ETH_FCS_LEN +
+// ENET_PAD;
+
 pub const MIN_MTU_SIZE: usize = 60;
 pub const RX_BUF_LENGTH: usize = 2048;
+pub const TX_BUF_LENGTH: usize = 2048;
 
-/// Control blocks to manage the hw descriptors, same for Rx and Tx
-pub type ControlBlocks = [ControlBlock; NUM_DMA_DESC];
+pub type Descriptors = [Descriptor; NUM_DMA_DESC];
 
-pub type RxRings = [RxRing; NUM_DMA_RINGS];
-pub type TxRings = [TxRing; NUM_DMA_RINGS];
+//pub type RxRings = [RxRing; NUM_DMA_RINGS];
+//pub type TxRings = [TxRing; NUM_DMA_RINGS];
 
 pub struct Devices {
     pub sys: SYS,
@@ -106,27 +127,23 @@ pub enum Error {
     Malformed,
     Exhausted,
     Dropped,
+    TimedOut,
 }
 
 pub struct Eth {
+    c_index: usize,
+    rx_index: usize,
+    tx_index: usize,
+
     dev: Devices,
+    // TODO - borrow the timer instead
     timer: SysCounter,
-    crc_fwd_en: bool,
-
-    link_status: bool,
-    speed: u16,
-    full_duplex: bool,
-    pause: bool,
-    // TODO - fix up this pattern
-    old_link_status: Option<bool>,
-    old_speed: Option<u16>,
-    old_full_duplex: Option<bool>,
-    old_pause: Option<bool>,
-
-    rx_cbs: &'static mut [ControlBlock],
-    tx_cbs: &'static mut [ControlBlock],
-    rx_rings: &'static mut [RxRing],
-    tx_rings: &'static mut [TxRing],
+    // TODO - use refs or storage instead
+    rx_mem: &'static mut [Descriptor],
+    /*rx_cbs: &'static mut [ControlBlock],
+     *tx_cbs: &'static mut [ControlBlock],
+     *rx_rings: &'static mut [RxRing],
+     *tx_rings: &'static mut [TxRing], */
 }
 
 impl Eth {
@@ -134,11 +151,15 @@ impl Eth {
         devices: Devices,
         timer: SysCounter,
         mac_address: EthernetAddress,
-        rx_cbs: &'static mut [ControlBlock],
-        tx_cbs: &'static mut [ControlBlock],
-        rx_rings: &'static mut [RxRing],
-        tx_rings: &'static mut [TxRing],
+        rx_mem: &'static mut [Descriptor],
+        /*rx_cbs: &'static mut [ControlBlock],
+         *tx_cbs: &'static mut [ControlBlock],
+         *rx_rings: &'static mut [RxRing],
+         *tx_rings: &'static mut [TxRing], */
     ) -> Result<Self, Error> {
+        assert_eq!(rx_mem.len(), NUM_DMA_DESC);
+
+        // TODO https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c#L626
         let version_major = match devices
             .sys
             .rev_ctrl
@@ -167,67 +188,71 @@ impl Eth {
         }
 
         let mut eth = Eth {
+            c_index: 0,
+            rx_index: 0,
+            tx_index: 0,
             dev: devices,
             timer,
-            crc_fwd_en: false,
-            link_status: false,
-            speed: 0,
-            full_duplex: false,
-            pause: false,
-            old_link_status: None,
-            old_speed: None,
-            old_full_duplex: None,
-            old_pause: None,
-            rx_cbs,
-            tx_cbs,
-            rx_rings,
-            tx_rings,
+            rx_mem,
+            /*rx_cbs,
+             *tx_cbs,
+             *rx_rings,
+             *tx_rings, */
         };
 
+        //
+        // stuff from bcmgenet_eth_probe()
+
+        eth.mii_config();
+
         eth.umac_reset();
+
+        // bcmgenet_mdio_init()
+        // TODO - need to call mdio_reset()?
+
+        // bcmgenet_phy_init()
+        // TODO - anything here, phy stuff?
+
+        //
+        // now things from bcmgenet_gmac_eth_start()
+        //
+
+        // bcmgenet_umac_reset()
         eth.umac_reset2();
+        eth.umac_reset();
         eth.umac_init();
 
-        // Make sure we reflect the value of CRC_CMD_FWD
-        eth.crc_fwd_en = eth.dev.umac.cmd.is_set(Cmd::CrcFwd::Read);
-
+        // bcmgenet_gmac_write_hwaddr()
         eth.umac_set_hw_addr(&mac_address);
 
-        // Disable Rx/Tx DMA and flush Tx queues
+        // Disable RX/TX DMA and flush TX queues
+        // bcmgenet_disable_dma()
         eth.dma_disable();
 
-        // Reinitialize TxDMA and RxDMA
-        eth.dma_init();
+        eth.rx_ring_init();
+        eth.rx_descs_init();
+        eth.tx_ring_init();
 
-        // Always enable ring 16 - descriptor ring
+        // Enable RX/TX DMA
+        // bcmgenet_enable_dma(priv);
         eth.dma_enable();
 
-        eth.hfb_init();
-
+        // read PHY properties over the wire from generic PHY set-up
+        // phy_startup()
         // TODO
-        // interrupts
+        let status = eth.phy_read_status();
+        assert_eq!(status.link_status, true, "Link is down");
+        assert_ne!(status.speed, 0, "Speed is 0");
+        assert_eq!(status.full_duplex, true, "Not full duplex");
 
-        eth.mii_probe();
+        // Update MAC registers based on PHY property
+        // bcmgenet_adjust_link()
+        eth.mii_setup(&status);
 
+        // Enable Rx/Tx
         eth.netif_start();
 
-        eth.umac_set_rx_mode(&mac_address);
-
         Ok(eth)
-    }
-
-    pub fn link_up(&self) -> bool {
-        self.link_status
-    }
-
-    pub fn link_speed(&self) -> u16 {
-        self.speed
-    }
-
-    // In circle this is called every 2 seconds
-    pub fn update_phy(&mut self) {
-        self.phy_read_status();
-        self.mii_setup();
     }
 
     pub fn recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
@@ -235,14 +260,6 @@ impl Eth {
     }
 
     pub fn send(&mut self, pkt: &[u8]) -> Result<(), Error> {
-        self.dma_send(pkt)?;
-
-        // TODO - poll for completion for now
-        loop {
-            self.intr_handler0();
-            self.intr_handler1();
-        }
-
-        Ok(())
+        self.dma_send(pkt)
     }
 }

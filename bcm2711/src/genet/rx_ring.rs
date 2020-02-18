@@ -127,8 +127,8 @@ register! {
 pub struct RxRing {
     pub read_ptr: ReadPtr::Register,                   // 0x00
     pub read_ptr_hi: ReadPtrHi::Register,              // 0x04
-    pub prod_index: ProdIndex::Register,               // 0x0C
-    pub cons_index: ConsIndex::Register,               // 0x08
+    pub prod_index: ProdIndex::Register,               // 0x08
+    pub cons_index: ConsIndex::Register,               // 0x0C
     pub buf_size: BufSize::Register,                   // 0x10
     pub start_addr: StartAddr::Register,               // 0x14
     pub start_addr_hi: StartAddrHi::Register,          // 0x18

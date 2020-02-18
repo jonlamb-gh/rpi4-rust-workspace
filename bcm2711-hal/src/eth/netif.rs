@@ -9,7 +9,7 @@ impl Eth {
         // umac_enable_set(CMD_TX_EN | CMD_RX_EN, true);
         self.dev.umac.cmd.modify(Cmd::TxEn::Set + Cmd::RxEn::Set);
 
-        self.intr_tx_enable();
+        //self.intr_tx_enable();
 
         //NOTE: link interrupts do not work, must be polled
         // link_intr_enable();
