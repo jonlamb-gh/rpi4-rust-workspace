@@ -4,22 +4,6 @@ use bcm2711::genet::sys::PortCtrl;
 use bcm2711::genet::umac::Cmd;
 
 impl Eth {
-    pub(crate) fn mii_probe(&mut self) {
-        // Initialize link state variables that mii_setup() uses
-        //        self.old_link_status = None;
-        //        self.old_speed = None;
-        //        self.old_full_duplex = None;
-        //        self.old_pause = None;
-        //
-        //        self.mdio_reset();
-        //
-        //        self.phy_read_status();
-        //
-        //        self.mii_setup();
-        //
-        //        self.mii_config();
-    }
-
     pub(crate) fn mii_setup(&mut self, status: &PhyStatus) {
         // Program UMAC and RGMII block based on established
         // link speed, duplex, and pause. The speed set in
@@ -49,11 +33,11 @@ impl Eth {
 
     pub(crate) fn mii_config(&mut self) {
         // RGMII_NO_ID: TXC transitions at the same time as TXD
-        //		(requires PCB or receiver-side delay)
-        // RGMII:	Add 2ns delay on TXC (90 degree shift)
+        // (requires PCB or receiver-side delay)
+        //
+        // RGMII: Add 2ns delay on TXC (90 degree shift)
         //
         // ID is implicitly disabled for 100Mbps (RG)MII operation.
-
         self.dev.sys.port_ctrl.modify(PortCtrl::PortMode::ExtGPhy);
 
         // This is an external PHY (xMII), so we need to enable the RGMII

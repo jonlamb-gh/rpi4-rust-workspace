@@ -51,14 +51,6 @@ impl Eth {
         self.dev.rbuf.ctrl.modify(Ctrl::Align2Byte::Set);
 
         self.dev.rbuf.tbuf_size_ctrl.write(1);
-
-        // TODO
-        //self.intr_disable();
-
-        // Enable MDIO interrupts on GENET v3+
-        // NOTE: MDIO interrupts do not work
-        //intrl2_0_writel(
-        // UMAC_IRQ_MDIO_DONE | UMAC_IRQ_MDIO_ERROR, INTRL2_CPU_MASK_CLEAR);
     }
 
     pub(crate) fn umac_set_hw_addr(&mut self, addr: &EthernetAddress) {
@@ -90,7 +82,6 @@ impl Eth {
         self.set_mdf_addr(index, addr);
     }
 
-    // TODO - check this logic
     fn set_mdf_addr(&mut self, index: usize, addr: &EthernetAddress) {
         self.dev.umac.mdf_addrs[index].mdf_addr0.modify(
             MdfAddr0::Addr0::Field::new(addr.0[0] as _).unwrap()

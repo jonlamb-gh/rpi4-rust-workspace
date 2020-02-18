@@ -1,8 +1,6 @@
 //! UniMAC MDIO
 
-// TODO - add mdio stuff to the hal crate
-
-use crate::eth::Eth;
+use crate::eth::{Error, Eth};
 use bcm2711::genet::mdio::Cmd;
 use bcm2711::genet::umac;
 use bitfield::bitfield;
@@ -78,7 +76,7 @@ impl Eth {
         let _ = self.mdio_read(Register::MiiBmsr);
     }
 
-    pub(crate) fn mdio_read(&mut self, reg: Register) -> u16 {
+    pub(crate) fn mdio_read(&mut self, reg: Register) -> Result<u16, Error> {
         self.dev.mdio.cmd.modify(
             Cmd::Rw::RwRead
                 + Cmd::PhyId::Field::new(PHY_ID as _).unwrap()
@@ -90,13 +88,12 @@ impl Eth {
         self.mdio_wait();
 
         if self.dev.mdio.cmd.is_set(Cmd::ReadFail::Read) {
-            panic!("TODO - error handling");
+            Err(Error::HwError)
         } else {
-            self.dev.mdio.cmd.get_field(Cmd::Data::Read).unwrap().val() as u16
+            Ok(self.dev.mdio.cmd.get_field(Cmd::Data::Read).unwrap().val() as u16)
         }
     }
 
-    // TODO - proper timeout/wait
     fn mdio_wait(&self) {
         while self
             .dev

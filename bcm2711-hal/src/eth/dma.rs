@@ -1,28 +1,15 @@
 use crate::eth::{
-    Error, Eth, FCS_LEN, LEADING_PAD, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH,
+    Error, Eth, LEADING_PAD, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH,
 };
 use crate::prelude::*;
 use bcm2711::genet::umac::*;
 use bcm2711::genet::{rx_desc, rx_dma, rx_ring, tx_desc, tx_dma, tx_ring};
 use bcm2711::genet::{
-    DEFAULT_Q, DESC_INDEX, DMA_DESC_WORDS, DMA_FC_THRESH_HI, DMA_FC_THRESH_LO,
-    DMA_MAX_BURST_LENGTH, DMA_RING_BUF_PRIORITY_SHIFT, NUM_DMA_DESC, Q0_PRIORITY, Q16_RX_BD_CNT,
-    Q16_TX_BD_CNT, QTAG_MASK, QTAG_SHIFT, RX_BDS_PER_Q, RX_QUEUES, TX_BDS_PER_Q, TX_QUEUES,
+    DEFAULT_Q, DMA_DESC_WORDS, DMA_FC_THRESH_HI, DMA_FC_THRESH_LO, DMA_MAX_BURST_LENGTH,
+    NUM_DMA_DESC, QTAG_MASK, QTAG_SHIFT,
 };
 use core::convert::TryInto;
-
-// TODO - remove the pub(crates) on locally used methods
-// - use typenum/checked reg fields
-
-// DMA_PRIO_REG_INDEX(x) = (q / 6)
-fn prio_reg_index(q_index: usize) -> usize {
-    q_index / 6
-}
-
-// DMA_PRIO_REG_SHIFT(q) = (q % 6) * DMA_RING_BUF_PRIORITY_SHIFT
-fn prio_reg_shift(q_index: usize) -> usize {
-    (q_index % 6) * DMA_RING_BUF_PRIORITY_SHIFT
-}
+use core::fmt::Write;
 
 impl Eth {
     pub(crate) fn dma_enable(&mut self) {
@@ -52,8 +39,6 @@ impl Eth {
     }
 
     pub(crate) fn rx_ring_init(&mut self) {
-        // see my init_rx_ring()
-        //
         self.dev.rdma.burst_size.write(DMA_MAX_BURST_LENGTH as _);
 
         // Set start and end address, read and write pointers
@@ -74,13 +59,11 @@ impl Eth {
             rx_ring::XonXoffThresh::XonThresh::Field::new(DMA_FC_THRESH_HI as _).unwrap()
                 + rx_ring::XonXoffThresh::XoffThresh::Field::new(DMA_FC_THRESH_LO as _).unwrap(),
         );
+
+        self.dev.rdma.ring_cfg.write(1 << DEFAULT_Q);
     }
 
     pub(crate) fn rx_descs_init(&mut self) {
-        // see my init_rx_queues()
-        // dmadesc_rx_set_addr()
-        //
-
         self.c_index = 0;
 
         for desc_index in 0..NUM_DMA_DESC {
@@ -106,8 +89,6 @@ impl Eth {
     }
 
     pub(crate) fn tx_ring_init(&mut self) {
-        // see my init_tx_ring()
-        //
         self.dev.rdma.burst_size.write(DMA_MAX_BURST_LENGTH as _);
 
         // Set start and end address, read and write pointers
@@ -128,9 +109,15 @@ impl Eth {
             tx_ring::BufSize::Size::Field::new(NUM_DMA_DESC as _).unwrap()
                 + tx_ring::BufSize::BufferSize::Field::new(TX_BUF_LENGTH as _).unwrap(),
         );
+
+        self.dev.tdma.ring_cfg.write(1 << DEFAULT_Q);
     }
 
-    pub(crate) fn dma_recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
+    pub(crate) fn dma_recv<T: core::fmt::Write>(
+        &mut self,
+        pkt: &mut [u8],
+        stdout: &mut T,
+    ) -> Result<usize, Error> {
         if pkt.len() < MAX_MTU_SIZE {
             return Err(Error::Exhausted);
         }
@@ -141,6 +128,14 @@ impl Eth {
             .unwrap()
             .val();
 
+        // TODO add this back in?
+        //let discards = self.dev.rdma.rings[DEFAULT_Q]
+        //    .prod_index
+        //    .get_field(rx_ring::ProdIndex::DiscardCnt::Read)
+        //    .unwrap()
+        //    .val();
+        //assert_eq!(discards, 0, "TODO");
+
         if p_index as usize == self.c_index {
             Ok(0)
         } else {
@@ -150,6 +145,30 @@ impl Eth {
                 .unwrap()
                 .val();
 
+            // TODO - check the error bits in the desc
+
+            writeln!(
+                stdout,
+                "\np_index {}, c_index {}, rx_index {}, dma_len {}",
+                p_index, self.c_index, self.rx_index, dma_len
+            )
+            .ok();
+
+            writeln!(
+                stdout,
+                "len_status 0x{:X}",
+                self.dev.rdma.descriptors[self.rx_index].len_status.read()
+            )
+            .ok();
+
+            let addr_low = self.dev.rdma.descriptors[self.rx_index].addr_low.read();
+            writeln!(stdout, "addr_low 0x{:X}", addr_low).ok();
+
+            assert_eq!(
+                addr_low as usize,
+                self.rx_mem[self.rx_index].buffer.as_ptr() as usize & 0xFFFFFFFF
+            );
+
             let eop = self.dev.rdma.descriptors[self.rx_index]
                 .len_status
                 .is_set(rx_desc::LenStatus::Eop::Read);
@@ -158,6 +177,7 @@ impl Eth {
                 .is_set(rx_desc::LenStatus::Sop::Read);
 
             let result = if !eop || !sop {
+                writeln!(stdout, "eop {}, sop {}", eop, sop).ok();
                 Err(Error::Fragmented)
             } else {
                 // To cater for the IP header alignment the hardware does.
@@ -191,6 +211,12 @@ impl Eth {
             if self.rx_index >= NUM_DMA_DESC {
                 self.rx_index = 0;
             }
+            writeln!(
+                stdout,
+                "++ c_index {}, rx_index {}",
+                self.c_index, self.rx_index
+            )
+            .ok();
 
             result
         }
@@ -250,8 +276,6 @@ impl Eth {
             .prod_index
             .write(p_index as _);
 
-        // TODO - proper timeout
-        // Error::TimedOut
         let mut tries = 100;
         loop {
             let c_index = self.dev.tdma.rings[DEFAULT_Q]

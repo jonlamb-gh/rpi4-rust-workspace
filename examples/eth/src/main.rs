@@ -45,6 +45,10 @@ fn kernel_entry() -> ! {
         &mut RX_DESC[..]
     };
 
+    for (idx, desc) in rx_descriptors.iter().enumerate() {
+        writeln!(serial, "rx_desc[{}] {}", idx, desc).ok();
+    }
+
     let mut pkt_buffer = unsafe {
         static mut PKT: [u8; MAX_MTU_SIZE] = [0; MAX_MTU_SIZE];
         &mut PKT[..]
@@ -60,7 +64,48 @@ fn kernel_entry() -> ! {
     // for about 1 minute
     // then things start flowing again
     // (check my sop / eop logic in dma_recv)
-    // (could also be my network...)
+    //
+    // during this issue, I can't send L2 frames, I get the rx status but still
+    // fragmented
+    //
+    // might be it shows up after I've filled all 256 rx descriptors
+    // and not clearing some status bits in the desc/dcb?
+    //
+    // need to experiment with frame size in my test l2 sender
+    //
+    // happens consistently at the same spot
+    // dma_len is set to 2048? - check desc. initialization
+    // it's like it only knows about ~171 desc. instead of 256
+    //
+    // TODO - what is supposed to reset eth.c_index?
+    // when do p_index and eth.c_index roll over?
+    //
+    // p_index 172, rx_index 171, dma_len 2048
+    //eop false, sop false
+    //++ c_index 172, rx_index 172
+    //Eth Error Fragmented
+    //Eth Error Fragmented
+    //
+    // p_index 172, c_index 171, rx_index 171, dma_len 2048
+    //eop false, sop false
+    //++ c_index 172, rx_index 172
+    //Eth Error Fragmented
+    //
+    // len_status shows errs?
+    // when ok: len_status 0x3E7F80
+    // when not: len_status 0x8008000 (what we set them to)
+    //
+    // cleans up after descriptors wrap back around to 0
+    //
+    //Eth Error Fragmented
+    //p_index 256, c_index 255, rx_index 255, dma_len 2048
+    //eop false, sop false
+    //++ c_index 256, rx_index 0
+    //Eth Error Fragmented
+    //p_index 257, c_index 256, rx_index 0, dma_len 62
+    //++ c_index 257, rx_index 1
+    //Recv'd 60 bytes
+
     //
     //00 80 00 D8 50 E6 CF 61 50 80 01 00 00 14 00 02 00 00 00 00 00 00 00 0E DE 00
     // 1C Recv'd 60 bytes
@@ -85,7 +130,7 @@ fn kernel_entry() -> ! {
     ];
 
     loop {
-        match eth.recv(&mut pkt_buffer) {
+        match eth.recv(&mut pkt_buffer, &mut serial) {
             Ok(size) => {
                 if size != 0 {
                     writeln!(serial, "Recv'd {} bytes", size).ok();

@@ -24,7 +24,7 @@ impl fmt::Display for EthernetAddress {
         let bytes = self.0;
         write!(
             f,
-            "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]
         )
     }

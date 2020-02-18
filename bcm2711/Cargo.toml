@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 typenum = "1.10"
-bounded-registers = "0.1.0"
+bounded-registers = "0.1"
 bitfield = "0.13"

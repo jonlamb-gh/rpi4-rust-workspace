@@ -45,8 +45,8 @@ register! {
     u32,
     RW,
     Fields [
-        Size WIDTH(U16) OFFSET(U0),
-        BufferSize WIDTH(U16) OFFSET(U16),
+        BufferSize WIDTH(U16) OFFSET(U0),
+        Size WIDTH(U16) OFFSET(U16),
     ]
 }
 
