@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 bcm2711-hal = { path = "../bcm2711-hal" }
-embedded-graphics = "0.6.0-alpha.2"
+embedded-graphics = "0.6.0-beta.1"

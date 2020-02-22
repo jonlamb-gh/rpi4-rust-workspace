@@ -15,7 +15,9 @@ use crate::hal::serial::Serial;
 use crate::hal::time::Bps;
 use core::fmt::Write;
 use display::embedded_graphics::prelude::*;
-use display::embedded_graphics::{fonts::Font12x16, pixelcolor::Rgb888, text_12x16};
+use display::embedded_graphics::{
+    fonts::Font12x16, fonts::Text, pixelcolor::Rgb888, style::TextStyle,
+};
 use display::{Display, SCRATCHPAD_MEM_MIN_SIZE};
 
 fn kernel_entry() -> ! {
@@ -29,6 +31,8 @@ fn kernel_entry() -> ! {
 
     let mut serial = Serial::uart1(UART1::new(), (tx, rx), Bps(115200), clocks);
 
+    writeln!(serial, "Embedded graphics example").ok();
+
     // Construct the DMA peripheral, reset and enable CH0
     let dma = DMA::new();
     let mut dma_parts = dma.split();
@@ -37,8 +41,6 @@ fn kernel_entry() -> ! {
     dma_chan.reset();
 
     writeln!(serial, "DMA Channel ID: 0x{:X}", dma_chan.dma_id()).ok();
-
-    writeln!(serial, "Embedded graphics example").ok();
 
     let sn = get_serial_number(&mut mbox).serial_number();
     writeln!(serial, "Serial number: {:#010X}", sn).ok();
@@ -75,14 +77,23 @@ fn kernel_entry() -> ! {
 
     const STATIC_SIZE: usize = 800 * 600 * 4;
     assert!(vc_mem_size <= STATIC_SIZE);
-    let mut backbuffer_mem = [0; STATIC_SIZE / 4];
-    let mut scratchpad_mem = [0; SCRATCHPAD_MEM_MIN_SIZE / 4];
+
+    let backbuffer_mem = unsafe {
+        static mut BACKBUFFER_MEM: [u32; STATIC_SIZE / 4] = [0; STATIC_SIZE / 4];
+        &mut BACKBUFFER_MEM[..]
+    };
+
+    let scratchpad_mem = unsafe {
+        static mut SCRATCHPAD_MEM: [u32; SCRATCHPAD_MEM_MIN_SIZE / 4] =
+            [0; SCRATCHPAD_MEM_MIN_SIZE / 4];
+        &mut SCRATCHPAD_MEM[..]
+    };
 
     let mut display = Display::new(
         fb,
         dma_chan,
         dma::ControlBlock::new(),
-        &mut scratchpad_mem,
+        scratchpad_mem,
         &mut backbuffer_mem[..vc_mem_words],
         &mut frontbuffer_mem[..vc_mem_words],
     )
@@ -99,18 +110,18 @@ fn kernel_entry() -> ! {
     // DMA the backbuffer to the frontbuffer/display
     display.swap_buffers().unwrap();
 
-    let styled_text: Font12x16<Rgb888> = text_12x16!(
-        "Hello world!",
-        stroke = Some(Rgb888::RED),
-        fill = Some(Rgb888::GREEN)
-    );
+    let styled_text = Text::new("Hello Rust!", Point::new(100, 100))
+        .into_styled(TextStyle::new(Font12x16, Rgb888::BLACK));
 
-    display.draw(styled_text.translate(Point::new(100, 100)));
+    styled_text.draw(&mut display).unwrap();
+
     display.swap_buffers().unwrap();
 
     writeln!(serial, "All done").ok();
 
-    loop {}
+    loop {
+        hal::cortex_a::asm::nop();
+    }
 }
 
 fn get_serial_number(mbox: &mut Mailbox) -> GetSerialNumRepr {

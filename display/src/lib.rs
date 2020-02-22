@@ -7,7 +7,7 @@ use crate::hal::dma;
 use crate::hal::mailbox::{AllocFramebufferRepr, PixelOrder};
 use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
 use embedded_graphics::prelude::*;
-use embedded_graphics::Drawing;
+use embedded_graphics::DrawTarget;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Error {
@@ -326,20 +326,23 @@ impl<'a> Display<'a> {
     }
 }
 
-impl<'a, C> Drawing<C> for Display<'a>
+impl<'a, C> DrawTarget<C> for Display<'a>
 where
     C: RgbColor,
 {
-    fn draw<T>(&mut self, item_pixels: T)
-    where
-        T: IntoIterator<Item = Pixel<C>>,
-    {
-        for Pixel(coord, color) in item_pixels {
-            if coord[0] as usize >= self.width() || coord[1] as usize >= self.height() {
-                continue;
-            }
+    type Error = core::convert::Infallible;
 
+    fn draw_pixel(&mut self, pixel: Pixel<C>) -> Result<(), Self::Error> {
+        let Pixel(coord, color) = pixel;
+
+        if (coord[0] as usize) < self.width() && (coord[1] as usize) < self.height() {
             self.set_pixel(coord[0] as _, coord[1] as _, &color);
         }
+
+        Ok(())
+    }
+
+    fn size(&self) -> Size {
+        Size::new(self.width() as _, self.height() as _)
     }
 }

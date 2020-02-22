@@ -4,6 +4,8 @@ extern crate embedded_hal as hal;
 
 pub use bcm2711;
 
+pub use cortex_a;
+
 pub mod cache;
 pub mod clocks;
 pub mod delay;

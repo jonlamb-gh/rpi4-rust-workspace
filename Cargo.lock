@@ -16,7 +16,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro-hack 0.5.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 1.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -114,24 +114,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keypad"
-version = "0.1.0"
-dependencies = [
- "bcm2711-hal 0.1.0",
- "keypad 0.1.4 (git+https://github.com/jonlamb-gh/keypad.git?branch=digital-v2)",
- "raspi3_boot 0.1.0",
-]
-
-[[package]]
-name = "keypad"
-version = "0.1.4"
-source = "git+https://github.com/jonlamb-gh/keypad.git?branch=digital-v2#8d7b0efabef78709fc38d1c4b3d87bc34aea81a6"
-dependencies = [
- "embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "mbox"
 version = "0.1.0"
 dependencies = [
@@ -156,7 +138,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "syn 1.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -205,7 +187,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "syn"
-version = "1.0.14"
+version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -258,7 +240,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cortex-a 2.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fd807a12241940332c7c9f6aeaf3f7539d4213853d32445d17c97f3e7eebe118"
 "checksum embedded-graphics 0.6.0-beta.1 (registry+https://github.com/rust-lang/crates.io-index)" = "472809c1937f8a4bd58d4b6b5e769c1cd5341c5b88a62106f44424de15d92d2f"
 "checksum embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ee4908a155094da7723c2d60d617b820061e3b4efcc3d9e293d206a5a76c170b"
-"checksum keypad 0.1.4 (git+https://github.com/jonlamb-gh/keypad.git?branch=digital-v2)" = "<none>"
 "checksum nb 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "b1411551beb3c11dedfb0a90a0fa256b47d28b9ec2cdff34c25a2fa59e45dbdc"
 "checksum panic-abort 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4e20e6499bbbc412f280b04a42346b356c6fa0753d5fd22b7bd752ff34c778ee"
 "checksum proc-macro-hack 0.5.11 (registry+https://github.com/rust-lang/crates.io-index)" = "ecd45702f76d6d3c75a80564378ae228a85f0b59d2f3ed43c91b4a69eb2ebfc5"
@@ -267,7 +248,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum r0 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e2a38df5b15c8d5c7e8654189744d8e396bddc18ad48041a500ce52d6948941f"
 "checksum register 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6e10c2ba523bc81270ecb9b6ca6704f42cd1efec89fddbfe0e520ad0e218f401"
 "checksum static_assertions 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-"checksum syn 1.0.14 (registry+https://github.com/rust-lang/crates.io-index)" = "af6f3550d8dff9ef7dc34d384ac6f107e5d31c8f57d9f28e0081503f547ac8f5"
+"checksum syn 1.0.15 (registry+https://github.com/rust-lang/crates.io-index)" = "7a0294dc449adc58bb6592fff1a23d3e5e6e235afc6a0ffca2657d19e7bbffe5"
 "checksum tock-registers 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "70323afdb8082186c0986da0e10f6e4ed103d681c921c00597e98d9806dac20f"
 "checksum typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6d2783fe2d6b8c1101136184eb41be8b1ad379e4657050b8aaff0c79ee7575f9"
 "checksum unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
