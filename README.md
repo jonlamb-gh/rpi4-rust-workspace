@@ -2,6 +2,8 @@
 
 Rust workspace for RPi4 bare metal things
 
+A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials).
+
 ## Building
 
 ```rust
