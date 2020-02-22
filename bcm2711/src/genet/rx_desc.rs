@@ -1,3 +1,5 @@
+use static_assertions::assert_eq_size;
+
 register! {
     LenStatus,
     u32,
@@ -46,3 +48,5 @@ pub struct RxDescriptor {
     pub addr_low: AddrLow::Register,     // 0x04
     pub addr_high: AddrHigh::Register,   // 0x08
 }
+
+assert_eq_size!(RxDescriptor, [u8; crate::genet::DMA_DESC_SIZE]);

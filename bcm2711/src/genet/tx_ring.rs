@@ -4,6 +4,8 @@
 // - CONS/PROD
 // - XON_XOFF_THRESH / FLOW_PERIOD
 
+use static_assertions::assert_eq_size;
+
 register! {
     ReadPtr,
     u32,
@@ -141,3 +143,5 @@ pub struct TxRing {
     pub write_ptr_hi: WritePtrHi::Register,            // 0x30
     __reserved_0: [u32; 3],                            // 0x34
 }
+
+assert_eq_size!(TxRing, [u8; crate::genet::DMA_RING_SIZE]);

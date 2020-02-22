@@ -60,68 +60,6 @@ fn kernel_entry() -> ! {
 
     writeln!(serial, "Recv loop").ok();
 
-    // TODO - after a few minutes start getting nothing but Fragmented errors
-    // for about 1 minute
-    // then things start flowing again
-    // (check my sop / eop logic in dma_recv)
-    //
-    // during this issue, I can't send L2 frames, I get the rx status but still
-    // fragmented
-    //
-    // might be it shows up after I've filled all 256 rx descriptors
-    // and not clearing some status bits in the desc/dcb?
-    //
-    // need to experiment with frame size in my test l2 sender
-    //
-    // happens consistently at the same spot
-    // dma_len is set to 2048? - check desc. initialization
-    // it's like it only knows about ~171 desc. instead of 256
-    //
-    // TODO - what is supposed to reset eth.c_index?
-    // when do p_index and eth.c_index roll over?
-    //
-    // p_index 172, rx_index 171, dma_len 2048
-    //eop false, sop false
-    //++ c_index 172, rx_index 172
-    //Eth Error Fragmented
-    //Eth Error Fragmented
-    //
-    // p_index 172, c_index 171, rx_index 171, dma_len 2048
-    //eop false, sop false
-    //++ c_index 172, rx_index 172
-    //Eth Error Fragmented
-    //
-    // len_status shows errs?
-    // when ok: len_status 0x3E7F80
-    // when not: len_status 0x8008000 (what we set them to)
-    //
-    // cleans up after descriptors wrap back around to 0
-    //
-    //Eth Error Fragmented
-    //p_index 256, c_index 255, rx_index 255, dma_len 2048
-    //eop false, sop false
-    //++ c_index 256, rx_index 0
-    //Eth Error Fragmented
-    //p_index 257, c_index 256, rx_index 0, dma_len 62
-    //++ c_index 257, rx_index 1
-    //Recv'd 60 bytes
-
-    //
-    //00 80 00 D8 50 E6 CF 61 50 80 01 00 00 14 00 02 00 00 00 00 00 00 00 0E DE 00
-    // 1C Recv'd 60 bytes
-    //FF FF FF FF FF FF 01 80 C2 00 00 01 88 74 E1 B0 A6 7F 38 60 A0 27 BA AF 10 00
-    // 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-    // 00 00 00 00 00 00 00 00 00 00 Recv'd 60 bytes
-    //01 80 C2 00 00 00 D8 50 E6 CF 61 50 00 26 42 42 03 00 00 00 00 00 80 00 D8 50
-    // E6 CF 61 50 00 00 00 00 80 00 D8 50 E6 CF 61 50 80 01 00 00 14 00 02 00
-    // 00 00 00 00 00 00 0E DE 00 1C Eth Error Fragmented
-    //Eth Error Fragmented
-    //Eth Error Fragmented
-    //Eth Error Fragmented
-    //Eth Error Fragmented
-    //Eth Error Fragmented
-    // ...
-
     let forged_pkt: [u8; 60] = [
         0x3C, 0xE1, 0xA1, 0x4E, 0x48, 0x5C, 0xDC, 0xA6, 0x32, 0x2D, 0xD7, 0x6C, 0x88, 0x74, 0xE2,
         0xE4, 0x36, 0x23, 0xFD, 0xEA, 0xCA, 0x87, 0x49, 0x5B, 0xD0, 0x20, 0x00, 0x00, 0x00, 0x00,

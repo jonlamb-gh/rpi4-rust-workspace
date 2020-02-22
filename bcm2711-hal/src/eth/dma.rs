@@ -43,11 +43,15 @@ impl Eth {
 
         // Set start and end address, read and write pointers
         self.dev.rdma.rings[DEFAULT_Q].start_addr.write(0);
+        self.dev.rdma.rings[DEFAULT_Q].start_addr_hi.write(0);
         self.dev.rdma.rings[DEFAULT_Q].read_ptr.write(0);
+        self.dev.rdma.rings[DEFAULT_Q].read_ptr_hi.write(0);
         self.dev.rdma.rings[DEFAULT_Q].write_ptr.write(0);
+        self.dev.rdma.rings[DEFAULT_Q].write_ptr_hi.write(0);
         self.dev.rdma.rings[DEFAULT_Q]
             .end_addr
-            .write((NUM_DMA_DESC * (DMA_DESC_WORDS - 1)).try_into().unwrap());
+            .write(((NUM_DMA_DESC * DMA_DESC_WORDS) - 1).try_into().unwrap());
+        self.dev.rdma.rings[DEFAULT_Q].end_addr_hi.write(0);
 
         self.dev.rdma.rings[DEFAULT_Q].prod_index.write(0);
         self.dev.rdma.rings[DEFAULT_Q].cons_index.write(0);
@@ -89,15 +93,19 @@ impl Eth {
     }
 
     pub(crate) fn tx_ring_init(&mut self) {
-        self.dev.rdma.burst_size.write(DMA_MAX_BURST_LENGTH as _);
+        self.dev.tdma.burst_size.write(DMA_MAX_BURST_LENGTH as _);
 
         // Set start and end address, read and write pointers
         self.dev.tdma.rings[DEFAULT_Q].start_addr.write(0);
+        self.dev.tdma.rings[DEFAULT_Q].start_addr_hi.write(0);
         self.dev.tdma.rings[DEFAULT_Q].read_ptr.write(0);
+        self.dev.tdma.rings[DEFAULT_Q].read_ptr_hi.write(0);
         self.dev.tdma.rings[DEFAULT_Q].write_ptr.write(0);
+        self.dev.tdma.rings[DEFAULT_Q].write_ptr_hi.write(0);
         self.dev.tdma.rings[DEFAULT_Q]
             .end_addr
-            .write((NUM_DMA_DESC * (DMA_DESC_WORDS - 1)).try_into().unwrap());
+            .write(((NUM_DMA_DESC * DMA_DESC_WORDS) - 1).try_into().unwrap());
+        self.dev.tdma.rings[DEFAULT_Q].end_addr_hi.write(0);
 
         self.dev.tdma.rings[DEFAULT_Q].prod_index.write(0);
         self.dev.tdma.rings[DEFAULT_Q].cons_index.write(0);
@@ -146,6 +154,17 @@ impl Eth {
                 .val();
 
             // TODO - check the error bits in the desc
+            if self.dev.rdma.descriptors[self.rx_index]
+                .len_status
+                .matches_any(
+                    rx_desc::LenStatus::RxOverflow::Read
+                        + rx_desc::LenStatus::RxCrcErr::Read
+                        + rx_desc::LenStatus::RxErr::Read,
+                )
+            {
+                // TODO
+                panic!("ERROR BITS");
+            }
 
             writeln!(
                 stdout,
@@ -164,10 +183,14 @@ impl Eth {
             let addr_low = self.dev.rdma.descriptors[self.rx_index].addr_low.read();
             writeln!(stdout, "addr_low 0x{:X}", addr_low).ok();
 
+            let addr_hi = self.dev.rdma.descriptors[self.rx_index].addr_high.read();
+            writeln!(stdout, "addr_hi 0x{:X}", addr_hi).ok();
+
             assert_eq!(
                 addr_low as usize,
                 self.rx_mem[self.rx_index].buffer.as_ptr() as usize & 0xFFFFFFFF
             );
+            assert_eq!(addr_hi, 0);
 
             let eop = self.dev.rdma.descriptors[self.rx_index]
                 .len_status

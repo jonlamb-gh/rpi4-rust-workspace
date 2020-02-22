@@ -25,6 +25,7 @@ version = "0.1.0"
 dependencies = [
  "bitfield 0.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "bounded-registers 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "static_assertions 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

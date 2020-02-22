@@ -62,7 +62,6 @@ pub const TX_DMA_OFFSET: usize = 0x4000;
 pub const NUM_DMA_RINGS: usize = 17;
 
 /// Max of 16 priority queues and 1 default queue
-pub const DESC_INDEX: usize = 16;
 pub const DEFAULT_Q: usize = 16;
 
 /// Each DMA descriptor is 3 words (12 bytes)
