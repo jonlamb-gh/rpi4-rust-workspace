@@ -28,7 +28,7 @@ fn kernel_entry() -> ! {
     let mut serial = Serial::uart1(UART1::new(), (tx, rx), Bps(115200), clocks);
 
     let sys_timer = SysTimer::new();
-    let sys_counter = sys_timer.split().sys_counter;
+    let mut sys_counter = sys_timer.split().sys_counter;
 
     writeln!(serial, "GENET Ethernet example").ok();
 
@@ -39,24 +39,37 @@ fn kernel_entry() -> ! {
 
     let eth_devices = Devices::new();
 
-    // TODO - just putting these massive blobs in the bss for now
     let rx_descriptors = unsafe {
         static mut RX_DESC: Descriptors = arr![Descriptor::zero(); 256];
         &mut RX_DESC[..]
     };
-
-    for (idx, desc) in rx_descriptors.iter().enumerate() {
-        writeln!(serial, "rx_desc[{}] {}", idx, desc).ok();
-    }
 
     let mut pkt_buffer = unsafe {
         static mut PKT: [u8; MAX_MTU_SIZE] = [0; MAX_MTU_SIZE];
         &mut PKT[..]
     };
 
-    let mut eth = Eth::new(eth_devices, sys_counter, mac_addr, rx_descriptors).unwrap();
+    let mut eth = Eth::new(eth_devices, &mut sys_counter, mac_addr, rx_descriptors).unwrap();
 
     writeln!(serial, "Ethernet initialized").ok();
+
+    writeln!(serial, "Waiting for link-up").ok();
+
+    loop {
+        let status = eth.status().unwrap();
+        if status.link_status {
+            writeln!(serial, "Link is up").ok();
+            writeln!(serial, "Speed: {}", status.speed).ok();
+            writeln!(serial, "Full duplex: {}", status.full_duplex).ok();
+
+            assert_ne!(status.speed, 0, "Speed is 0");
+            assert_eq!(status.full_duplex, true, "Not full duplex");
+            break;
+        }
+
+        sys_counter.delay_ms(100_u32);
+        writeln!(serial, ".").ok();
+    }
 
     writeln!(serial, "Recv loop").ok();
 
@@ -67,8 +80,9 @@ fn kernel_entry() -> ! {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ];
 
+    let mut cnt = 0;
     loop {
-        match eth.recv(&mut pkt_buffer, &mut serial) {
+        match eth.recv(&mut pkt_buffer) {
             Ok(size) => {
                 if size != 0 {
                     writeln!(serial, "Recv'd {} bytes", size).ok();
@@ -77,9 +91,12 @@ fn kernel_entry() -> ! {
                     }
                     write!(serial, "\n").ok().unwrap();
 
-                    //writeln!(serial, "Sending forged pkt {} bytes",
-                    // forged_pkt.len()).ok();
-                    // eth.send(&forged_pkt).unwrap();
+                    // Send a packet every N recv's
+                    if cnt % 10 == 0 {
+                        writeln!(serial, "Sending forged pkt {} bytes", forged_pkt.len()).ok();
+                        eth.send(&forged_pkt).unwrap();
+                    }
+                    cnt += 1;
                 }
             }
             Err(e) => writeln!(serial, "Eth Error {:?}", e).ok().unwrap(),

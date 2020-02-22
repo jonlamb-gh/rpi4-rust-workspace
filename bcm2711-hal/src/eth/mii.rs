@@ -3,7 +3,7 @@ use bcm2711::genet::ext::RgmiiOobCtrl;
 use bcm2711::genet::sys::PortCtrl;
 use bcm2711::genet::umac::Cmd;
 
-impl Eth {
+impl<'a> Eth<'a> {
     pub(crate) fn mii_setup(&mut self, status: &PhyStatus) {
         // Program UMAC and RGMII block based on established
         // link speed, duplex, and pause. The speed set in

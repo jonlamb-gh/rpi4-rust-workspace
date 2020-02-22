@@ -1,8 +1,3 @@
-// TODO - field defs
-// Rx/Tx diff
-// - CONS/PROD
-// - XON_XOFF_THRESH / FLOW_PERIOD
-
 use static_assertions::assert_eq_size;
 
 register! {

@@ -1,9 +1,3 @@
-// TODO
-// - field defs
-// - this was copied from rx_ring for now
-// - CONS/PROD
-// - XON_XOFF_THRESH / FLOW_PERIOD
-
 use static_assertions::assert_eq_size;
 
 register! {

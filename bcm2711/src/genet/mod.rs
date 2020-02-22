@@ -95,7 +95,7 @@ pub const Q16_TX_BD_CNT: usize = NUM_DMA_DESC - (TX_QUEUES * TX_BDS_PER_Q);
 pub const DMA_FC_THRESH_HI: usize = NUM_DMA_DESC >> 4;
 pub const DMA_FC_THRESH_LO: usize = 5;
 
-// Highest priority queue
+/// Highest priority queue
 pub const Q0_PRIORITY: usize = 0;
 
 pub const DMA_RING_BUF_PRIORITY_SHIFT: usize = 5;

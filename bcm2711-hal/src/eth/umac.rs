@@ -1,14 +1,14 @@
 use crate::eth::{Eth, EthernetAddress, MAX_MTU_SIZE};
-use crate::prelude::*;
+use crate::hal::blocking::delay::DelayUs;
 use bcm2711::genet::rbuf::*;
 use bcm2711::genet::sys::*;
 use bcm2711::genet::umac::*;
 
-impl Eth {
-    pub(crate) fn umac_reset(&mut self) {
+impl<'a> Eth<'a> {
+    pub(crate) fn umac_reset<D: DelayUs<u32>>(&mut self, delay: &mut D) {
         // 7358a0/7552a0: bad default in RBUF_FLUSH_CTRL.umac_sw_rst
         self.dev.sys.rbuf_flush_ctrl.write(0);
-        self.timer.delay_us(10u32);
+        delay.delay_us(10u32);
 
         // Disable MAC while updating its registers
         self.dev.umac.cmd.write(0);
@@ -18,25 +18,25 @@ impl Eth {
             .umac
             .cmd
             .modify(Cmd::SwReset::Set + Cmd::LclLoopEn::Set);
-        self.timer.delay_us(2u32);
+        delay.delay_us(2u32);
         self.dev.umac.cmd.write(0);
     }
 
-    pub(crate) fn umac_reset2(&mut self) {
+    pub(crate) fn umac_reset2<D: DelayUs<u32>>(&mut self, delay: &mut D) {
         self.dev
             .sys
             .rbuf_flush_ctrl
             .modify(RBufFlushCtrl::Reset::Set);
-        self.timer.delay_us(10u32);
+        delay.delay_us(10u32);
         self.dev
             .sys
             .rbuf_flush_ctrl
             .modify(RBufFlushCtrl::Reset::Clear);
-        self.timer.delay_us(10u32);
+        delay.delay_us(10u32);
     }
 
-    pub(crate) fn umac_init(&mut self) {
-        self.umac_reset();
+    pub(crate) fn umac_init<D: DelayUs<u32>>(&mut self, delay: &mut D) {
+        self.umac_reset(delay);
 
         // Clear tx/rx counter
         self.dev

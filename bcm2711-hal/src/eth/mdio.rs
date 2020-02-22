@@ -65,7 +65,7 @@ impl From<u16> for MiiStat1000 {
     }
 }
 
-impl Eth {
+impl<'a> Eth<'a> {
     // Workaround for integrated BCM7xxx Gigabit PHYs which have a problem with
     // their internal MDIO management controller making them fail to successfully
     // be read from or written to for the first transaction.  We insert a dummy

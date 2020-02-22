@@ -1,5 +1,3 @@
-// TODO - not sure about the filter block's structure
-
 use crate::genet::HFB_PADDR;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};

@@ -23,7 +23,6 @@ register! {
 }
 
 register! {
-    // TODO - unknown, they clear this register
     UnknownCtrl,
     u32,
     RW,

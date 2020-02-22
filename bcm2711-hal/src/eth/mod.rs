@@ -3,7 +3,7 @@
 //! This implementation was based on:
 //! https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c
 
-use crate::timer::SysCounter;
+use crate::hal::blocking::delay::DelayUs;
 use bcm2711::genet::*;
 
 pub use crate::eth::address::EthernetAddress;
@@ -69,6 +69,7 @@ impl Devices {
 pub enum Error {
     HwVersionNotSupported,
     HwError,
+    HwDescError,
     Fragmented,
     Malformed,
     Exhausted,
@@ -76,25 +77,20 @@ pub enum Error {
     TimedOut,
 }
 
-pub struct Eth {
+pub struct Eth<'a> {
     c_index: usize,
     rx_index: usize,
     tx_index: usize,
-
     dev: Devices,
-    // TODO - borrow the timer instead
-    // borrow Trait Delay
-    timer: SysCounter,
-    // TODO - use refs or storage instead
-    rx_mem: &'static mut [Descriptor],
+    rx_mem: &'a mut [Descriptor],
 }
 
-impl Eth {
-    pub fn new(
+impl<'a> Eth<'a> {
+    pub fn new<D: DelayUs<u32>>(
         devices: Devices,
-        timer: SysCounter,
+        delay: &mut D,
         mac_address: EthernetAddress,
-        rx_mem: &'static mut [Descriptor],
+        rx_mem: &'a mut [Descriptor],
     ) -> Result<Self, Error> {
         assert_eq!(rx_mem.len(), NUM_DMA_DESC);
 
@@ -131,25 +127,22 @@ impl Eth {
             rx_index: 0,
             tx_index: 0,
             dev: devices,
-            timer,
             rx_mem,
         };
 
         eth.mii_config();
-        eth.umac_reset();
+        eth.umac_reset(delay);
         eth.mdio_reset();
 
-        eth.umac_reset2();
-        eth.umac_reset();
-        eth.umac_init();
+        eth.umac_reset2(delay);
+        eth.umac_reset(delay);
+        eth.umac_init(delay);
 
         eth.umac_set_hw_addr(&mac_address);
-
-        // TODO - is rx_mode still needed?
         eth.umac_set_rx_mode(&mac_address);
 
         // Disable RX/TX DMA and flush TX queues
-        eth.dma_disable();
+        eth.dma_disable(delay);
 
         eth.rx_ring_init();
         eth.rx_descs_init();
@@ -158,11 +151,7 @@ impl Eth {
         // Enable RX/TX DMA
         eth.dma_enable();
 
-        // TODO - get phy status method and retry mechanism
         let status = eth.phy_read_status()?;
-        assert_eq!(status.link_status, true, "Link is down");
-        assert_ne!(status.speed, 0, "Speed is 0");
-        assert_eq!(status.full_duplex, true, "Not full duplex");
 
         // Update MAC registers based on PHY property
         eth.mii_setup(&status);
@@ -173,12 +162,12 @@ impl Eth {
         Ok(eth)
     }
 
-    pub fn recv<T: core::fmt::Write>(
-        &mut self,
-        pkt: &mut [u8],
-        stdout: &mut T,
-    ) -> Result<usize, Error> {
-        self.dma_recv(pkt, stdout)
+    pub fn status(&mut self) -> Result<PhyStatus, Error> {
+        self.phy_read_status()
+    }
+
+    pub fn recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
+        self.dma_recv(pkt)
     }
 
     pub fn send(&mut self, pkt: &[u8]) -> Result<(), Error> {

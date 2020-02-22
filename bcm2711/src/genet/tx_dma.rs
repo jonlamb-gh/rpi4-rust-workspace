@@ -4,11 +4,6 @@ use crate::genet::{NUM_DMA_DESC, NUM_DMA_RINGS, TX_DMA_PADDR};
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
-// TODO
-// - maybe break apart the regions
-// - some of the regs overlap, like DMA_ARB_CTRL and DMA_RING0_TIMEOUT
-// - field defs
-
 register! {
     RingCfg,
     u32,
@@ -59,7 +54,6 @@ register! {
             Wrr = U1,
             Sp  = U2
         ],
-        // TODO - not sure this is true
         RingBufPrio WIDTH(U5) OFFSET(U5),
     ]
 }

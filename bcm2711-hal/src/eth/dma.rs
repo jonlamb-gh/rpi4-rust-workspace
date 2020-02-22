@@ -1,7 +1,7 @@
 use crate::eth::{
     Error, Eth, LEADING_PAD, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH,
 };
-use crate::prelude::*;
+use crate::hal::blocking::delay::DelayUs;
 use bcm2711::genet::umac::*;
 use bcm2711::genet::{rx_desc, rx_dma, rx_ring, tx_desc, tx_dma, tx_ring};
 use bcm2711::genet::{
@@ -9,9 +9,8 @@ use bcm2711::genet::{
     NUM_DMA_DESC, QTAG_MASK, QTAG_SHIFT,
 };
 use core::convert::TryInto;
-use core::fmt::Write;
 
-impl Eth {
+impl<'a> Eth<'a> {
     pub(crate) fn dma_enable(&mut self) {
         self.dev
             .rdma
@@ -23,7 +22,7 @@ impl Eth {
             .modify(tx_dma::Ctrl::Enable::Set + tx_dma::Ctrl::DefDescEnable::Set);
     }
 
-    pub(crate) fn dma_disable(&mut self) {
+    pub(crate) fn dma_disable<D: DelayUs<u32>>(&mut self, delay: &mut D) {
         self.dev
             .tdma
             .ctrl
@@ -34,7 +33,7 @@ impl Eth {
             .modify(rx_dma::Ctrl::Enable::Clear + rx_dma::Ctrl::DefDescEnable::Clear);
 
         self.dev.umac.tx_flush.modify(TxFlush::Flush::Set);
-        self.timer.delay_us(10u32);
+        delay.delay_us(10u32);
         self.dev.umac.tx_flush.modify(TxFlush::Flush::Clear);
     }
 
@@ -75,8 +74,6 @@ impl Eth {
             let addr_low = (address & (core::u32::MAX as u64)) as u32;
             let addr_high = ((address >> 32) & (core::u32::MAX as u64)) as u32;
 
-            // TODO
-            // Should use BUS_ADDRESS() here, but does not work
             self.dev.rdma.descriptors[desc_index]
                 .addr_low
                 .write(addr_low);
@@ -121,11 +118,7 @@ impl Eth {
         self.dev.tdma.ring_cfg.write(1 << DEFAULT_Q);
     }
 
-    pub(crate) fn dma_recv<T: core::fmt::Write>(
-        &mut self,
-        pkt: &mut [u8],
-        stdout: &mut T,
-    ) -> Result<usize, Error> {
+    pub(crate) fn dma_recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
         if pkt.len() < MAX_MTU_SIZE {
             return Err(Error::Exhausted);
         }
@@ -136,7 +129,7 @@ impl Eth {
             .unwrap()
             .val();
 
-        // TODO add this back in?
+        // TODO add this back in, not in the u-boot impl
         //let discards = self.dev.rdma.rings[DEFAULT_Q]
         //    .prod_index
         //    .get_field(rx_ring::ProdIndex::DiscardCnt::Read)
@@ -153,44 +146,13 @@ impl Eth {
                 .unwrap()
                 .val();
 
-            // TODO - check the error bits in the desc
-            if self.dev.rdma.descriptors[self.rx_index]
+            let packet_desc_error = self.dev.rdma.descriptors[self.rx_index]
                 .len_status
                 .matches_any(
                     rx_desc::LenStatus::RxOverflow::Read
                         + rx_desc::LenStatus::RxCrcErr::Read
                         + rx_desc::LenStatus::RxErr::Read,
-                )
-            {
-                // TODO
-                panic!("ERROR BITS");
-            }
-
-            writeln!(
-                stdout,
-                "\np_index {}, c_index {}, rx_index {}, dma_len {}",
-                p_index, self.c_index, self.rx_index, dma_len
-            )
-            .ok();
-
-            writeln!(
-                stdout,
-                "len_status 0x{:X}",
-                self.dev.rdma.descriptors[self.rx_index].len_status.read()
-            )
-            .ok();
-
-            let addr_low = self.dev.rdma.descriptors[self.rx_index].addr_low.read();
-            writeln!(stdout, "addr_low 0x{:X}", addr_low).ok();
-
-            let addr_hi = self.dev.rdma.descriptors[self.rx_index].addr_high.read();
-            writeln!(stdout, "addr_hi 0x{:X}", addr_hi).ok();
-
-            assert_eq!(
-                addr_low as usize,
-                self.rx_mem[self.rx_index].buffer.as_ptr() as usize & 0xFFFFFFFF
-            );
-            assert_eq!(addr_hi, 0);
+                );
 
             let eop = self.dev.rdma.descriptors[self.rx_index]
                 .len_status
@@ -200,8 +162,9 @@ impl Eth {
                 .is_set(rx_desc::LenStatus::Sop::Read);
 
             let result = if !eop || !sop {
-                writeln!(stdout, "eop {}, sop {}", eop, sop).ok();
                 Err(Error::Fragmented)
+            } else if packet_desc_error {
+                Err(Error::HwDescError)
             } else {
                 // To cater for the IP header alignment the hardware does.
                 // This would actually not be needed if we don't program
@@ -221,7 +184,6 @@ impl Eth {
             };
 
             // Always try to update the rings, even if an error was encountered
-            // bcmgenet_gmac_free_pkt()
 
             // Tell the MAC we have consumed that last receive buffer
             self.c_index = (self.c_index + 1) & 0xFFFF;
@@ -234,12 +196,6 @@ impl Eth {
             if self.rx_index >= NUM_DMA_DESC {
                 self.rx_index = 0;
             }
-            writeln!(
-                stdout,
-                "++ c_index {}, rx_index {}",
-                self.c_index, self.rx_index
-            )
-            .ok();
 
             result
         }
@@ -258,8 +214,6 @@ impl Eth {
             .unwrap()
             .val();
 
-        // TODO
-        // Should use BUS_ADDRESS() here, but does not work
         let address = pkt.as_ptr() as u64;
         let addr_low = (address & (core::u32::MAX as u64)) as u32;
         let addr_high = ((address >> 32) & (core::u32::MAX as u64)) as u32;
@@ -271,7 +225,6 @@ impl Eth {
         // Register writes to GISB bus can take couple hundred nanoseconds
         // and are done for each packet, save these expensive writes unless
         // the platform is explicitly configured for 64-bits/LPAE.
-        // TODO: write DMA_DESC_ADDRESS_HI only once
         self.dev.tdma.descriptors[self.tx_index]
             .addr_high
             .write(addr_high);
