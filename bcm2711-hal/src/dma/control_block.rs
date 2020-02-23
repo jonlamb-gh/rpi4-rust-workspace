@@ -2,8 +2,14 @@
 
 use crate::cache::bus_address_bits;
 use bitfield::bitfield;
+use core::fmt;
+use static_assertions::{assert_eq_size, const_assert_eq};
 
 pub const CONTROL_BLOCK_SIZE: usize = 8 * 4;
+
+pub const TRANSFER_LENGTH_MAX: u32 = 0x3FFF_FFFF;
+
+pub const TRANSFER_LENGTH_MAX_LITE: u32 = 0xFFFF;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TransferLength {
@@ -17,10 +23,10 @@ pub enum TransferWidth {
     Bits128,
 }
 
-/// 8 words (256 bits) in length and must start at a 256-bit aligned address
+/// 8 words (256 bits or 32 bytes) in length and must start at a 256-bit aligned
+/// address
 #[derive(Debug)]
-#[repr(C)]
-#[repr(align(256))]
+#[repr(C, align(32))]
 pub struct ControlBlock {
     /// Transfer info
     pub info: TxfrInfoWord,
@@ -37,6 +43,24 @@ pub struct ControlBlock {
     #[doc(hidden)]
     _reserved_0: u32,
     _reserved_1: u32,
+}
+
+assert_eq_size!(ControlBlock, [u32; 8]);
+const_assert_eq!(CONTROL_BLOCK_SIZE, 32);
+
+impl fmt::Display for ControlBlock {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DCB {{ info: 0x{:X}, src: 0x{:X}, dest: 0x{:X}, length: 0x{:X}, stride: 0x{:X}, next: 0x{:X} }}",
+            self.info.0,
+            self.src,
+            self.dest,
+            self.length.0,
+            self.stride.0,
+            self.next,
+        )
+    }
 }
 
 bitfield! {
@@ -106,8 +130,14 @@ bitfield! {
     pub dest_stride, set_dest_stride : 31, 16;
 }
 
+impl Default for ControlBlock {
+    fn default() -> Self {
+        ControlBlock::new()
+    }
+}
+
 impl ControlBlock {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         ControlBlock {
             info: TxfrInfoWord(0),
             src: 0,
@@ -143,9 +173,6 @@ impl ControlBlock {
         self.dest = dest | bus_address_bits::ALIAS_4_L2_COHERENT;
     }
 
-    // TODO - sanity check params
-    // linear len is 30 bits
-    // 2d ylen is 14 bits
     pub fn set_length(&mut self, length: TransferLength) {
         match length {
             TransferLength::ModeLinear(l) => self.length.0 = l,
@@ -179,6 +206,10 @@ impl ControlBlock {
 
     pub fn set_dest_width(&mut self, width: TransferWidth) {
         self.info.set_dest_width(width.into());
+    }
+
+    pub fn set_next(&mut self, next_dcb_paddr: u32) {
+        self.next = next_dcb_paddr | bus_address_bits::ALIAS_4_L2_COHERENT;
     }
 }
 

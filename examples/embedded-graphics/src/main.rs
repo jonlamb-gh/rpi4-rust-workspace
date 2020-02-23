@@ -40,7 +40,7 @@ fn kernel_entry() -> ! {
     let mut dma_chan = dma_parts.ch0;
     dma_chan.reset();
 
-    writeln!(serial, "DMA Channel ID: 0x{:X}", dma_chan.dma_id()).ok();
+    writeln!(serial, "DMA Channel ID: 0x{:X}", dma_chan.id()).ok();
 
     let sn = get_serial_number(&mut mbox).serial_number();
     writeln!(serial, "Serial number: {:#010X}", sn).ok();
@@ -78,6 +78,11 @@ fn kernel_entry() -> ! {
     const STATIC_SIZE: usize = 800 * 600 * 4;
     assert!(vc_mem_size <= STATIC_SIZE);
 
+    let dcb_mem = unsafe {
+        static mut DCB_MEM: [dma::ControlBlock; 1] = [dma::ControlBlock::new()];
+        &mut DCB_MEM[..]
+    };
+
     let backbuffer_mem = unsafe {
         static mut BACKBUFFER_MEM: [u32; STATIC_SIZE / 4] = [0; STATIC_SIZE / 4];
         &mut BACKBUFFER_MEM[..]
@@ -92,7 +97,7 @@ fn kernel_entry() -> ! {
     let mut display = Display::new(
         fb,
         dma_chan,
-        dma::ControlBlock::new(),
+        dcb_mem,
         scratchpad_mem,
         &mut backbuffer_mem[..vc_mem_words],
         &mut frontbuffer_mem[..vc_mem_words],

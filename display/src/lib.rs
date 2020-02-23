@@ -39,7 +39,7 @@ pub struct Display<'a> {
     /// DMA channel, must support 2D transfers
     dma: dma::Channel,
     /// DMA-able control block memory
-    dcb_mem: dma::ControlBlock,
+    dcb_mem: &'a mut [dma::ControlBlock],
     /// DMA-able scratchpad memory
     scratchpad_mem: &'a mut [u32],
     /// DMA-able general memory for the backbuffer, must be greater than
@@ -63,7 +63,7 @@ impl<'a> Display<'a> {
     pub fn new(
         fb_info: AllocFramebufferRepr,
         dma: dma::Channel,
-        dcb_mem: dma::ControlBlock,
+        dcb_mem: &'a mut [dma::ControlBlock],
         scratchpad_mem: &'a mut [u32],
         backbuffer_mem: &'a mut [u32],
         frontbuffer_mem: &'a mut [u32],
@@ -112,9 +112,9 @@ impl<'a> Display<'a> {
             return Err(Error::FramebufferConfig);
         }
 
-        //if dcb_mem.size() < DCB_MEM_MIN_SIZE {
-        //    return Err(Error::InsufficientPMem);
-        //}
+        if dcb_mem.len() < 1 {
+            return Err(Error::InsufficientPMem);
+        }
 
         if (scratchpad_mem.len() * 4) < SCRATCHPAD_MEM_MIN_SIZE {
             return Err(Error::InsufficientPMem);
@@ -201,9 +201,11 @@ impl<'a> Display<'a> {
         self.set_scratchpad_src_fill_words(color);
 
         // TODO - DMA to backbuffer currently broken
-        //self.dma_transfer(TransferOp::FillBack)
+        //self.dma_transfer(TransferOp::FillBack)?;
+        //
         // Fill it manually for now
         self.fill_pixels(color);
+
         Ok(())
     }
 
@@ -211,24 +213,25 @@ impl<'a> Display<'a> {
     pub fn clear_screen(&mut self) -> Result<(), Error> {
         self.set_scratchpad_src_fill_words::<Rgb888>(&RgbColor::BLACK);
 
-        // self.dma_transfer(TransferOp::FillFront);
-
         // TODO - DMA to backbuffer currently broken
-        // self.dma_transfer(TransferOp::FillBack);
+        //self.dma_transfer(TransferOp::FillBack)?;
+        //
         // Clear it manually for now
         self.fill_pixels::<Rgb888>(&RgbColor::BLACK);
+
         self.swap_buffers()
     }
 
     /// Clears the backbuffer
     pub fn clear_buffer(&mut self) -> Result<(), Error> {
-        // TODO - public buffer enum type?
         self.set_scratchpad_src_fill_words::<Rgb888>(&RgbColor::BLACK);
 
         // TODO - DMA to backbuffer currently broken
-        // self.dma_transfer(TransferOp::FillBack);
+        //self.dma_transfer(TransferOp::FillBack)?;
+        //
         // Clear it manually for now
         self.fill_pixels::<Rgb888>(&RgbColor::BLACK);
+
         Ok(())
     }
 
@@ -296,7 +299,7 @@ impl<'a> Display<'a> {
         );
 
         // Initialize a DMA control block for the transfer
-        let dcb = &mut self.dcb_mem;
+        let dcb = &mut self.dcb_mem[0];
         dcb.init();
 
         // Configure the DCB
@@ -305,6 +308,7 @@ impl<'a> Display<'a> {
         dcb.set_src_width(dma::TransferWidth::Bits128);
         dcb.stride.set_src_stride(src_stride);
         dcb.info.set_src_inc(src_inc);
+
         dcb.set_dest(dest_paddr);
         dcb.set_dest_width(dma::TransferWidth::Bits128);
         dcb.stride.set_dest_stride(dest_stride);
@@ -314,8 +318,10 @@ impl<'a> Display<'a> {
         dcb.info.set_burst_len(4);
 
         // Wait for DMA to be ready, then do the transfer
-        while self.dma.is_busy() == true {}
-        self.dma.start(&self.dcb_mem as *const _ as u32);
+        while self.dma.is_busy() == true {
+            hal::cortex_a::asm::nop();
+        }
+        self.dma.start(dcb);
         self.dma.wait();
 
         if self.dma.errors() {

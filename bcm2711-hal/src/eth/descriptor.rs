@@ -23,7 +23,7 @@ impl fmt::Display for Descriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Descriptor {{ buffer len {} at 0x:{:X} }}",
+            "Descriptor {{ buffer len {} at 0x{:X} }}",
             self.buffer.len(),
             self.buffer.as_ptr() as usize
         )

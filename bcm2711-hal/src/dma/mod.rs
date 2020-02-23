@@ -17,7 +17,7 @@ mod control_block;
 
 pub use crate::dma::control_block::{
     ControlBlock, StrideWord, TransferLength, TransferWidth, TxfrInfoWord, TxfrLenWord,
-    CONTROL_BLOCK_SIZE,
+    CONTROL_BLOCK_SIZE, TRANSFER_LENGTH_MAX, TRANSFER_LENGTH_MAX_LITE,
 };
 
 pub trait DmaExt {
@@ -37,7 +37,7 @@ pub struct Parts {
 impl DmaExt for DMA {
     type Parts = Parts;
 
-    fn split(self) -> Parts {
+    fn split(self) -> Self::Parts {
         Parts {
             ch0: Channel {
                 dma: DMA::new().as_channel(CHANNEL0_OFFSET),
@@ -53,6 +53,8 @@ impl DmaExt for DMA {
 
 pub struct Channel {
     dma: DMA,
+    /* TODO - hold on to ref in start(), return it in wait()
+     *adcb: Option<&'a ControlBlock>, */
 }
 
 impl Channel {
@@ -60,7 +62,7 @@ impl Channel {
         self.dma.debug.is_set(Debug::Lite::Read)
     }
 
-    pub fn dma_id(&self) -> u8 {
+    pub fn id(&self) -> u8 {
         self.dma.debug.get_field(Debug::DmaId::Read).unwrap().val() as _
     }
 
@@ -70,6 +72,7 @@ impl Channel {
 
     pub fn abort(&mut self) {
         // TODO
+        // https://github.com/torvalds/linux/blob/master/drivers/dma/bcm2835-dma.c#L412
         unimplemented!();
     }
 
@@ -79,7 +82,7 @@ impl Channel {
         while self.dma.cs.is_set(ControlStatus::Reset::Read) == true {}
     }
 
-    pub fn wait(&self) {
+    pub fn wait(&mut self) {
         unsafe { barrier::dsb(barrier::SY) };
 
         while self.dma.cs.is_set(ControlStatus::Active::Read) {
@@ -92,12 +95,28 @@ impl Channel {
     /// dcb_paddr - the physical address of the control block to load
     /// NOTE: the physical address will be translated to a bus address for
     /// the DMA engine
-    pub fn start(&mut self, dcb_paddr: u32) {
+    pub fn start(&mut self, dcb: &ControlBlock) {
+        let dcb_paddr = dcb as *const _ as u32;
         assert_eq!(
             dcb_paddr & 0x1F,
             0,
             "Control block address must be 256 bit aligned"
         );
+        assert_ne!(dcb.src, 0, "Source address is NULL");
+        assert_ne!(dcb.dest, 0, "Destination address is NULL");
+
+        if self.is_lite() {
+            assert_eq!(
+                dcb.info.td_mode(),
+                false,
+                "LITE channel doesn't support 2D mode"
+            );
+            assert!(dcb.length.0 <= TRANSFER_LENGTH_MAX_LITE);
+        } else {
+            if !dcb.info.td_mode() {
+                assert!(dcb.length.0 <= TRANSFER_LENGTH_MAX);
+            }
+        }
 
         unsafe { barrier::dsb(barrier::SY) };
 
