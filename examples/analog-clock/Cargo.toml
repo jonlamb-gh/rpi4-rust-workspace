@@ -1,0 +1,16 @@
+[package]
+name = "analog-clock"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../../bcm2711-hal" }
+display = { path = "../../display" }
+micromath = "1.0"
+heapless = "0.5"
+
+[dependencies.raspi3_boot]
+path = "../../raspi3_boot"
+default-features = false
+features = ["panic-uart1"]

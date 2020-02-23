@@ -8,6 +8,7 @@ members = [
     "examples/uart1",
     "examples/mbox",
     "examples/embedded-graphics",
+    "examples/analog-clock",
     "examples/eth",
     "examples/mem2mem-dma",
 ]
