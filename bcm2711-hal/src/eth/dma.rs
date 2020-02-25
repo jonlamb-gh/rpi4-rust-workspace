@@ -1,6 +1,4 @@
-use crate::eth::{
-    Error, Eth, LEADING_PAD, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH,
-};
+use crate::eth::{Error, Eth, RxPacket, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH};
 use crate::hal::blocking::delay::DelayUs;
 use bcm2711::genet::umac::*;
 use bcm2711::genet::{rx_desc, rx_dma, rx_ring, tx_desc, tx_dma, tx_ring};
@@ -10,7 +8,7 @@ use bcm2711::genet::{
 };
 use core::convert::TryInto;
 
-impl<'a> Eth<'a> {
+impl<'rx, 'tx> Eth<'rx, 'tx> {
     pub(crate) fn dma_enable(&mut self) {
         self.dev
             .rdma
@@ -118,11 +116,7 @@ impl<'a> Eth<'a> {
         self.dev.tdma.ring_cfg.write(1 << DEFAULT_Q);
     }
 
-    pub(crate) fn dma_recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
-        if pkt.len() < MAX_MTU_SIZE {
-            return Err(Error::Exhausted);
-        }
-
+    pub(crate) fn dma_recv(&mut self) -> Result<RxPacket, Error> {
         let p_index = self.dev.rdma.rings[DEFAULT_Q]
             .prod_index
             .get_field(rx_ring::ProdIndex::Index::Read)
@@ -138,13 +132,13 @@ impl<'a> Eth<'a> {
         //assert_eq!(discards, 0, "TODO");
 
         if p_index as usize == self.c_index {
-            Ok(0)
+            Err(Error::WouldBlock)
         } else {
             let dma_len = self.dev.rdma.descriptors[self.rx_index]
                 .len_status
                 .get_field(rx_desc::LenStatus::Len::Read)
                 .unwrap()
-                .val();
+                .val() as usize;
 
             let packet_desc_error = self.dev.rdma.descriptors[self.rx_index]
                 .len_status
@@ -166,20 +160,14 @@ impl<'a> Eth<'a> {
             } else if packet_desc_error {
                 Err(Error::HwDescError)
             } else {
-                // To cater for the IP header alignment the hardware does.
-                // This would actually not be needed if we don't program
-                // RBUF_ALIGN_2B
-                let pkt_len = dma_len as usize - LEADING_PAD;
-
-                if pkt_len == 0 {
+                if dma_len == 0 {
                     Err(Error::Malformed)
-                } else if pkt_len > pkt.len() {
-                    Err(Error::Exhausted)
                 } else {
-                    let pkt_slice =
-                        &self.rx_mem[self.rx_index].buffer[LEADING_PAD..pkt_len + LEADING_PAD];
-                    &pkt[0..pkt_len].copy_from_slice(pkt_slice);
-                    Ok(pkt_len)
+                    let pkt = RxPacket {
+                        entry: &mut self.rx_mem[self.rx_index],
+                        length: dma_len,
+                    };
+                    Ok(pkt)
                 }
             };
 
@@ -201,22 +189,37 @@ impl<'a> Eth<'a> {
         }
     }
 
-    pub(crate) fn dma_send(&mut self, pkt: &[u8]) -> Result<(), Error> {
-        if pkt.len() > MAX_MTU_SIZE {
+    //pub(crate) fn dma_send(&mut self, pkt: &[u8]) -> Result<(), Error> {
+    pub(crate) fn dma_send<F: FnOnce(&mut [u8]) -> R, R>(
+        &mut self,
+        length: usize,
+        f: F,
+    ) -> Result<R, Error> {
+        if length > MAX_MTU_SIZE {
             return Err(Error::Exhausted);
-        } else if pkt.len() < MIN_MTU_SIZE {
-            return Err(Error::Dropped);
         }
+
+        let r = f(&mut self.tx_mem[self.tx_index].as_mut_slice()[..length]);
+
+        // Pad the frame if needed
+        let length = if length < MIN_MTU_SIZE {
+            for b in self.tx_mem[self.tx_index].as_mut_slice()[length..MIN_MTU_SIZE].iter_mut() {
+                *b = 0;
+            }
+            MIN_MTU_SIZE
+        } else {
+            length
+        };
+
+        let address = self.tx_mem[self.tx_index].buffer.as_ptr() as u64;
+        let addr_low = (address & (core::u32::MAX as u64)) as u32;
+        let addr_high = ((address >> 32) & (core::u32::MAX as u64)) as u32;
 
         let p_index = self.dev.tdma.rings[DEFAULT_Q]
             .prod_index
             .get_field(tx_ring::ProdIndex::Index::Read)
             .unwrap()
             .val();
-
-        let address = pkt.as_ptr() as u64;
-        let addr_low = (address & (core::u32::MAX as u64)) as u32;
-        let addr_high = ((address >> 32) & (core::u32::MAX as u64)) as u32;
 
         self.dev.tdma.descriptors[self.tx_index]
             .addr_low
@@ -234,7 +237,7 @@ impl<'a> Eth<'a> {
             .len_status
             .write(QTAG_MASK << QTAG_SHIFT);
         self.dev.tdma.descriptors[self.tx_index].len_status.modify(
-            tx_desc::LenStatus::Len::Field::new(pkt.len() as _).unwrap()
+            tx_desc::LenStatus::Len::Field::new(length as _).unwrap()
                 + tx_desc::LenStatus::TxAppendCrc::Set
                 + tx_desc::LenStatus::Sop::Set
                 + tx_desc::LenStatus::Eop::Set,
@@ -270,6 +273,6 @@ impl<'a> Eth<'a> {
             }
         }
 
-        Ok(())
+        Ok(r)
     }
 }

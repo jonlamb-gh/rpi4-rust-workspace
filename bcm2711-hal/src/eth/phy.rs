@@ -8,7 +8,7 @@ pub struct Status {
     pub pause: bool,
 }
 
-impl<'a> Eth<'a> {
+impl<'rx, 'tx> Eth<'rx, 'tx> {
     pub(crate) fn phy_read_status(&mut self) -> Result<Status, Error> {
         // Update the link status
         let bmsr: MiiBmsr = self.mdio_read(Register::MiiBmsr)?.into();

@@ -17,6 +17,16 @@ impl Descriptor {
             buffer: arr![0; 2048],
         }
     }
+
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        &self.buffer[..]
+    }
+
+    #[inline]
+    pub(crate) fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.buffer[..]
+    }
 }
 
 impl fmt::Display for Descriptor {

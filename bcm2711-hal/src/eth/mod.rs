@@ -9,6 +9,7 @@ use bcm2711::genet::*;
 pub use crate::eth::address::EthernetAddress;
 pub use crate::eth::descriptor::Descriptor;
 pub use crate::eth::phy::Status as PhyStatus;
+pub use crate::eth::rx::RxPacket;
 
 mod address;
 mod descriptor;
@@ -17,6 +18,7 @@ mod mdio;
 mod mii;
 mod netif;
 mod phy;
+mod rx;
 mod umac;
 
 const GENET_V5: u8 = 5;
@@ -67,6 +69,7 @@ impl Devices {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Error {
+    WouldBlock,
     HwVersionNotSupported,
     HwError,
     HwDescError,
@@ -77,22 +80,25 @@ pub enum Error {
     TimedOut,
 }
 
-pub struct Eth<'a> {
+pub struct Eth<'rx, 'tx> {
     c_index: usize,
     rx_index: usize,
     tx_index: usize,
     dev: Devices,
-    rx_mem: &'a mut [Descriptor],
+    rx_mem: &'rx mut [Descriptor],
+    tx_mem: &'tx mut [Descriptor],
 }
 
-impl<'a> Eth<'a> {
+impl<'rx, 'tx> Eth<'rx, 'tx> {
     pub fn new<D: DelayUs<u32>>(
         devices: Devices,
         delay: &mut D,
         mac_address: EthernetAddress,
-        rx_mem: &'a mut [Descriptor],
+        rx_mem: &'rx mut [Descriptor],
+        tx_mem: &'tx mut [Descriptor],
     ) -> Result<Self, Error> {
         assert_eq!(rx_mem.len(), NUM_DMA_DESC);
+        assert_eq!(tx_mem.len(), NUM_DMA_DESC);
 
         // TODO https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c#L626
         let version_major = match devices
@@ -128,6 +134,7 @@ impl<'a> Eth<'a> {
             tx_index: 0,
             dev: devices,
             rx_mem,
+            tx_mem,
         };
 
         eth.mii_config();
@@ -166,11 +173,11 @@ impl<'a> Eth<'a> {
         self.phy_read_status()
     }
 
-    pub fn recv(&mut self, pkt: &mut [u8]) -> Result<usize, Error> {
-        self.dma_recv(pkt)
+    pub fn recv(&mut self) -> Result<RxPacket, Error> {
+        self.dma_recv()
     }
 
-    pub fn send(&mut self, pkt: &[u8]) -> Result<(), Error> {
-        self.dma_send(pkt)
+    pub fn send<F: FnOnce(&mut [u8]) -> R, R>(&mut self, length: usize, f: F) -> Result<R, Error> {
+        self.dma_send(length, f)
     }
 }

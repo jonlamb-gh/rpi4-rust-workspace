@@ -1,0 +1,33 @@
+[package]
+name = "ip"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../../bcm2711-hal" }
+arr_macro = "0.1"
+nb = "0.1"
+
+[dependencies.raspi3_boot]
+path = "../../raspi3_boot"
+default-features = false
+features = ["panic-uart1"]
+
+[dependencies.log]
+version = "0.4"
+default-features = false
+
+[dependencies.smoltcp]
+version = "0.6"
+default-features = false
+features = [
+    "ethernet",
+    "proto-ipv4",
+    "proto-ipv6",
+    "socket-icmp",
+    "socket-udp",
+    "socket-tcp",
+#    "log",
+#    "verbose"
+]

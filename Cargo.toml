@@ -10,5 +10,11 @@ members = [
     "examples/embedded-graphics",
     "examples/analog-clock",
     "examples/eth",
+    "examples/ip",
     "examples/mem2mem-dma",
 ]
+
+[profile.release]
+# Prevents unaligned access, see:
+# https://github.com/rust-lang/rust/issues/66897
+opt-level = 1

@@ -9,7 +9,7 @@ use crate::hal::bcm2711::sys_timer::SysTimer;
 use crate::hal::bcm2711::uart1::UART1;
 use crate::hal::clocks::Clocks;
 use crate::hal::eth::*;
-use crate::hal::mailbox::*;
+use crate::hal::mailbox::{Channel, GetMacAddressRepr, Mailbox, RespMsg};
 use crate::hal::prelude::*;
 use crate::hal::serial::Serial;
 use crate::hal::time::Bps;
@@ -44,12 +44,19 @@ fn kernel_entry() -> ! {
         &mut RX_DESC[..]
     };
 
-    let mut pkt_buffer = unsafe {
-        static mut PKT: [u8; MAX_MTU_SIZE] = [0; MAX_MTU_SIZE];
-        &mut PKT[..]
+    let tx_descriptors = unsafe {
+        static mut TX_DESC: Descriptors = arr![Descriptor::zero(); 256];
+        &mut TX_DESC[..]
     };
 
-    let mut eth = Eth::new(eth_devices, &mut sys_counter, mac_addr, rx_descriptors).unwrap();
+    let mut eth = Eth::new(
+        eth_devices,
+        &mut sys_counter,
+        mac_addr,
+        rx_descriptors,
+        tx_descriptors,
+    )
+    .unwrap();
 
     writeln!(serial, "Ethernet initialized").ok();
 
@@ -82,23 +89,27 @@ fn kernel_entry() -> ! {
 
     let mut cnt = 0;
     loop {
-        match eth.recv(&mut pkt_buffer) {
-            Ok(size) => {
-                if size != 0 {
-                    writeln!(serial, "Recv'd {} bytes", size).ok();
-                    for b in 0..size {
-                        write!(serial, "{:02X} ", pkt_buffer[b]).ok();
+        match eth.recv() {
+            Ok(rx_packet) => {
+                if rx_packet.len() != 0 {
+                    writeln!(serial, "Recv'd {} bytes", rx_packet.len()).ok();
+                    for b in rx_packet.as_ref().iter() {
+                        write!(serial, "{:02X} ", *b).ok();
                     }
                     write!(serial, "\n").ok().unwrap();
 
                     // Send a packet every N recv's
                     if cnt % 10 == 0 {
                         writeln!(serial, "Sending forged pkt {} bytes", forged_pkt.len()).ok();
-                        eth.send(&forged_pkt).unwrap();
+                        eth.send(forged_pkt.len(), |buf| {
+                            buf.copy_from_slice(&forged_pkt);
+                        })
+                        .unwrap();
                     }
                     cnt += 1;
                 }
             }
+            Err(e) if e == Error::WouldBlock => (),
             Err(e) => writeln!(serial, "Eth Error {:?}", e).ok().unwrap(),
         }
     }

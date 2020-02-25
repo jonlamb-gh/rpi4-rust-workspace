@@ -4,7 +4,7 @@ use bcm2711::genet::rbuf::*;
 use bcm2711::genet::sys::*;
 use bcm2711::genet::umac::*;
 
-impl<'a> Eth<'a> {
+impl<'rx, 'tx> Eth<'rx, 'tx> {
     pub(crate) fn umac_reset<D: DelayUs<u32>>(&mut self, delay: &mut D) {
         // 7358a0/7552a0: bad default in RBUF_FLUSH_CTRL.umac_sw_rst
         self.dev.sys.rbuf_flush_ctrl.write(0);
