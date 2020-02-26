@@ -1,3 +1,4 @@
+use crate::hal::bcm2711::genet::NUM_DMA_DESC;
 use crate::hal::eth::{Eth, RxPacket, MAX_MTU_SIZE};
 use core::intrinsics::transmute;
 use core::ops::DerefMut;
@@ -16,11 +17,7 @@ impl<'a, 'rx, 'tx> Device<'a> for EthDevice<'rx, 'tx> {
     fn capabilities(&self) -> DeviceCapabilities {
         let mut caps = DeviceCapabilities::default();
         caps.max_transmission_unit = MAX_MTU_SIZE;
-        // TODO - can burst up to 256 desc
-        caps.max_burst_size = Some(1);
-        // The hw does Ethernet frame CRC
-        // TODO
-        //caps.checksum = ChecksumCapabilities::ignored();
+        caps.max_burst_size = Some(NUM_DMA_DESC / 2);
         caps
     }
 
