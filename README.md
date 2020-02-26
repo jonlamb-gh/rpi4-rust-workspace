@@ -4,6 +4,23 @@ Rust workspace for RPi4 bare metal things
 
 A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials).
 
+## Crates
+
+* [bcm2711](bcm2711/) : Device crate, registers defined via [bounded-registers](https://github.com/auxoncorp/bounded-registers)
+* [bcm2711-hal](bcm2711-hal/) : [embedded-hal](https://github.com/rust-embedded/embedded-hal) trait impls
+* [display](display/) : Double buffered DMA graphics/display library
+* [raspi3_boot](raspi3_boot/) : Mostly copied from [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials)
+
+## Examples
+
+* [analog-clock](examples/analog-clock/src/main.rs) : Port of the [embedded-graphics](https://github.com/jamwaffles/embedded-graphics) `analog-clock` example
+* [embedded-graphics](examples/embedded-graphics/src/main.rs) : Simple [embedded-graphics](https://github.com/jamwaffles/embedded-graphics) example
+* [eth](examples/eth/src/main.rs) : On-board GENET Ethernet example
+* [ip](examples/ip/src/main.rs) : [smoltcp](https://github.com/smoltcp-rs/smoltcp) IP stack / TCP server example
+* [mbox](examples/mbox/src/main.rs) : Reads various things using the [Mailbox property interface](https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface)
+* [mem2mem-dma](examples/mem2mem-dma/src/main.rs) : Simple DMA transfer example
+* [uart1](examples/uart1/src/main.rs) : UART1 example
+
 ## Building
 
 ```rust

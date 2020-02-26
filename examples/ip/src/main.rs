@@ -9,13 +9,16 @@ use crate::hal::bcm2711::sys_timer::SysTimer;
 use crate::hal::bcm2711::uart1::UART1;
 use crate::hal::clocks::Clocks;
 use crate::hal::eth::{self, Eth};
+use crate::hal::gpio::{Alternate, Pin14, Pin15, AF5};
 use crate::hal::mailbox::*;
 use crate::hal::prelude::*;
 use crate::hal::serial::Serial;
 use crate::hal::time::Bps;
 use crate::smoltcp_phy::EthDevice;
 use arr_macro::arr;
+use core::cell::UnsafeCell;
 use core::fmt::Write;
+use log::{error, info, warn, LevelFilter, Metadata, Record};
 use nb::block;
 use smoltcp::iface::{EthernetInterfaceBuilder, NeighborCache, Routes};
 use smoltcp::socket::{SocketSet, TcpSocket, TcpSocketBuffer};
@@ -23,6 +26,49 @@ use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 
 mod smoltcp_phy;
+
+static GLOBAL_LOGGER: SerialLogger = SerialLogger::new();
+
+// TODO - make generic Serial<UART, PINS>
+type LogInner = Serial<UART1, (Pin14<Alternate<AF5>>, Pin15<Alternate<AF5>>)>;
+
+struct SerialLogger {
+    serial: UnsafeCell<Option<LogInner>>,
+}
+
+impl SerialLogger {
+    pub const fn new() -> SerialLogger {
+        SerialLogger {
+            serial: UnsafeCell::new(None),
+        }
+    }
+
+    pub fn set_inner(&self, inner: LogInner) {
+        let serial = unsafe { &mut *self.serial.get() };
+        let _ = serial.replace(inner);
+    }
+}
+
+unsafe impl Sync for SerialLogger {}
+
+impl log::Log for SerialLogger {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            let maybe_serial = unsafe { &mut *self.serial.get() };
+            if let Some(serial) = maybe_serial {
+                writeln!(serial, "[{}] {}", record.level(), record.args()).unwrap();
+            } else {
+                panic!("Logger was used before being given its inner type");
+            }
+        }
+    }
+
+    fn flush(&self) {}
+}
 
 fn kernel_entry() -> ! {
     let mut mbox = Mailbox::new(MBOX::new());
@@ -33,19 +79,26 @@ fn kernel_entry() -> ! {
     let tx = gp.p14.into_alternate_af5();
     let rx = gp.p15.into_alternate_af5();
 
-    let mut serial = Serial::uart1(UART1::new(), (tx, rx), Bps(115200), clocks);
+    let serial = Serial::uart1(UART1::new(), (tx, rx), Bps(115200), clocks);
+
+    GLOBAL_LOGGER.set_inner(serial);
+    unsafe {
+        log::set_logger_racy(&GLOBAL_LOGGER)
+            .map(|()| log::set_max_level(LevelFilter::Trace))
+            .unwrap();
+    }
 
     let sys_timer = SysTimer::new();
     let sys_timer_parts = sys_timer.split();
     let mut sys_counter = sys_timer_parts.sys_counter;
     let mut timer = sys_timer_parts.timer1;
 
-    writeln!(serial, "smoltcp IP example").ok();
+    info!("smoltcp IP example");
 
-    writeln!(serial, "{:#?}", clocks).ok();
+    info!("{:#?}", clocks);
 
     let ethernet_addr = EthernetAddress::from_bytes(get_mac_address(&mut mbox).mac_address());
-    writeln!(serial, "MAC address: {}", ethernet_addr).ok();
+    info!("MAC address: {}", ethernet_addr);
 
     let eth_devices = eth::Devices::new();
 
@@ -68,16 +121,16 @@ fn kernel_entry() -> ! {
     )
     .unwrap();
 
-    writeln!(serial, "Ethernet initialized").ok();
+    info!("Ethernet initialized");
 
-    writeln!(serial, "Waiting for link-up").ok();
+    info!("Waiting for link-up");
 
     loop {
         let status = eth.status().unwrap();
         if status.link_status {
-            writeln!(serial, "Link is up").ok();
-            writeln!(serial, "Speed: {}", status.speed).ok();
-            writeln!(serial, "Full duplex: {}", status.full_duplex).ok();
+            info!("Link is up");
+            info!("Speed: {}", status.speed);
+            info!("Full duplex: {}", status.full_duplex);
 
             assert_ne!(status.speed, 0, "Speed is 0");
             assert_eq!(status.full_duplex, true, "Not full duplex");
@@ -85,7 +138,7 @@ fn kernel_entry() -> ! {
         }
 
         sys_counter.delay_ms(100_u32);
-        writeln!(serial, ".").ok();
+        info!(".");
     }
 
     let eth_dev = EthDevice { eth };
@@ -116,10 +169,10 @@ fn kernel_entry() -> ! {
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let server_handle = sockets.add(server_socket);
 
-    writeln!(serial, "IP stack initialized").ok();
-    writeln!(serial, "IP address: {}", local_addr).ok();
+    info!("IP stack initialized");
+    info!("IP address: {}", local_addr);
 
-    writeln!(serial, "Run loop").ok();
+    info!("Run loop");
 
     timer.start(200.hz());
 
@@ -133,9 +186,12 @@ fn kernel_entry() -> ! {
                 if !socket.is_open() {
                     socket
                         .listen(80)
-                        .or_else(|e| writeln!(serial, "TCP listen error: {:?}", e))
+                        .or_else(|e| {
+                            error!("TCP listen error: {:?}", e);
+                            Err(e)
+                        })
                         .unwrap();
-                    writeln!(serial, "Listening on port {}", 80).ok();
+                    info!("Listening on port {}", 80);
                 }
 
                 if socket.can_send() {
@@ -143,7 +199,10 @@ fn kernel_entry() -> ! {
                         .map(|_| {
                             socket.close();
                         })
-                        .or_else(|e| writeln!(serial, "TCP send error: {:?}", e))
+                        .or_else(|e| {
+                            error!("TCP send error: {:?}", e);
+                            Err(e)
+                        })
                         .unwrap();
                 }
             }
@@ -151,7 +210,7 @@ fn kernel_entry() -> ! {
             Err(e) =>
             // Ignore malformed packets
             {
-                writeln!(serial, "Error: {:?}", e).unwrap()
+                warn!("Error: {:?}", e);
             }
         }
     }
