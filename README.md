@@ -2,7 +2,7 @@
 
 Rust workspace for RPi4 bare metal things
 
-A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials).
+A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials) and [circle](https://github.com/rsta2/circle).
 
 ## Crates
 
@@ -109,12 +109,4 @@ kernel=u-boot.bin
 - [BCM2711](https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711/README.md)
 - [RPi4 datasheet](https://www.raspberrypi.org/documentation/hardware/raspberrypi/bcm2711/rpi_DATA_2711_1p0_preliminary.pdf)
 - [Revised BCM2837 doc](https://github.com/raspberrypi/documentation/files/1888662/BCM2837-ARM-Peripherals.-.Revised.-.V2-1.pdf)
-- [Bare metal boot code for ARMv8-A](http://infocenter.arm.com/help/topic/com.arm.doc.dai0527a/DAI0527A_baremetal_boot_code_for_ARMv8_A_processors.pdf)
-- [Bare-metal C++ code](https://github.com/rsta2/circle)
 - [bcm2711-rpi-4-b.dtb](https://github.com/Hexxeh/rpi-firmware/blob/master/bcm2711-rpi-4-b.dtb)
-- [Linux GENET drivers](https://github.com/torvalds/linux/tree/master/drivers/net/ethernet/broadcom/genet)
-- [U-boot GENET driver](https://github.com/u-boot/u-boot/blob/master/drivers/net/bcmgenet.c)
-- [More info on RPi4](https://www.raspberrypi.org/forums/viewtopic.php?t=244479&start=25)
-- [U-boot load over serial with kermit](http://blog.mezeske.com/?p=483)
-- [Inside the RPi4 article, has some Eth specs/etc](https://cdn.shopify.com/s/files/1/1560/1473/files/Inside_Raspberry_Pi_4.pdf)
-- [My RPi3 workspace](https://github.com/jonlamb-gh/rpi3-rust-workspace)
