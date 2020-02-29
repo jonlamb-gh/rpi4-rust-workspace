@@ -3,6 +3,7 @@
 extern crate bcm2711_hal as hal;
 pub extern crate embedded_graphics;
 
+use crate::hal::cache;
 use crate::hal::dma;
 use crate::hal::mailbox::{AllocFramebufferRepr, PixelOrder};
 use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
@@ -258,21 +259,29 @@ impl<'a> Display<'a> {
         // Both the backbuffer and the scratchpad words are contiguous
         let src_stride = 0;
 
-        let (src_inc, src_paddr, dest_paddr, dest_stride) = match op {
+        // TODO - take out explicit cache ops once DMA impl is refactored
+
+        let (src_inc, src_paddr, src_size, dest_paddr, dest_stride) = match op {
             TransferOp::FillBack => {
+                // todo!("Fixes and dest cache ops");
+
                 // Filling the backbuffer with the contents of the scratchpad words
                 (
                     false,
                     self.scratchpad_mem.as_ptr() as u32,
+                    self.scratchpad_mem.len() * 4,
                     self.backbuffer_mem.as_ptr() as u32,
                     backbuffer_stride,
                 )
             }
             TransferOp::FillFront => {
+                // todo!("Fixes and dest cache ops");
+
                 // Filling the frontbuffer with the contents of the scratchpad words
                 (
                     false,
                     self.scratchpad_mem.as_ptr() as u32,
+                    self.scratchpad_mem.len() * 4,
                     self.frontbuffer_mem.as_ptr() as u32,
                     frontbuffer_stride,
                 )
@@ -282,11 +291,16 @@ impl<'a> Display<'a> {
                 (
                     true,
                     self.backbuffer_mem.as_ptr() as u32,
+                    self.backbuffer_mem.len() * 4,
                     self.frontbuffer_mem.as_ptr() as u32,
                     frontbuffer_stride,
                 )
             }
         };
+
+        unsafe {
+            cache::clean_and_invalidate_data_cache_range(src_paddr as _, src_size);
+        }
 
         // This is not really obvious from the DMA documentation,
         // but the top 16 bits must be programmmed to "height -1"
@@ -317,11 +331,24 @@ impl<'a> Display<'a> {
         dcb.info.set_wait_resp(true);
         dcb.info.set_burst_len(4);
 
+        // TODO - hack until I redo the DMA impl
+        // src/dst refs are not used
+        let unused_src_buffer: [u32; 0] = [];
+        let mut unused_dest_buffer: [u32; 0] = [];
+
+        let txfr_res = dma::TransferResources {
+            src_cached: false,
+            dest_cached: false,
+            dcb: &dcb,
+            src_buffer: &unused_src_buffer,
+            dest_buffer: &mut unused_dest_buffer,
+        };
+
         // Wait for DMA to be ready, then do the transfer
         while self.dma.is_busy() == true {
             hal::cortex_a::asm::nop();
         }
-        self.dma.start(dcb);
+        self.dma.start(&txfr_res);
         self.dma.wait();
 
         if self.dma.errors() {

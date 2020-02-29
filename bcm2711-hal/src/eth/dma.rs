@@ -1,3 +1,4 @@
+use crate::cache;
 use crate::eth::{Error, Eth, RxPacket, MAX_MTU_SIZE, MIN_MTU_SIZE, RX_BUF_LENGTH, TX_BUF_LENGTH};
 use crate::hal::blocking::delay::DelayUs;
 use bcm2711::genet::umac::*;
@@ -163,6 +164,13 @@ impl<'rx, 'tx> Eth<'rx, 'tx> {
                 if dma_len == 0 {
                     Err(Error::Malformed)
                 } else {
+                    unsafe {
+                        cache::clean_and_invalidate_data_cache_range(
+                            self.rx_mem[self.rx_index].as_paddr(),
+                            RX_BUF_LENGTH,
+                        );
+                    }
+
                     let pkt = RxPacket {
                         entry: &mut self.rx_mem[self.rx_index],
                         length: dma_len,
@@ -211,7 +219,14 @@ impl<'rx, 'tx> Eth<'rx, 'tx> {
             length
         };
 
-        let address = self.tx_mem[self.tx_index].buffer.as_ptr() as u64;
+        unsafe {
+            cache::clean_and_invalidate_data_cache_range(
+                self.tx_mem[self.tx_index].as_paddr(),
+                TX_BUF_LENGTH,
+            );
+        }
+
+        let address = self.tx_mem[self.tx_index].as_paddr() as u64;
         let addr_low = (address & (core::u32::MAX as u64)) as u32;
         let addr_high = ((address >> 32) & (core::u32::MAX as u64)) as u32;
 

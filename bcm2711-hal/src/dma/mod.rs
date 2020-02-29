@@ -1,15 +1,17 @@
 //! DMA
 
 // TODO
-// - use dma pattern from cortex-m HAL's instead of the unsafe PMem style like
-//   in https://github.com/astro/stm32f429-hal no mmu/vaddr's, can use normal
-//   slices/memory
 // - generate all the channels via macros
 // - following https://github.com/rust-embedded/embedded-hal/issues/37#issuecomment-377823801
+// - https://github.com/stm32-rs/stm32f7xx-hal/blob/master/src/dma.rs
+// - https://github.com/stm32-rs/stm32l0xx-hal/pull/14
 // - fix the sync/fences/barriers
+// - allow for cached/uncached in transfer config, enable device/IO mem
+// - assumes we're using cached memory, mem2mem style
 
-use crate::cache::bus_address_bits;
+use crate::cache::{self, bus_address_bits};
 use bcm2711::dma::*;
+use core::mem;
 use core::sync::atomic::{compiler_fence, Ordering};
 use cortex_a::{asm, barrier};
 
@@ -51,10 +53,16 @@ impl DmaExt for DMA {
     }
 }
 
+pub struct TransferResources<'dcb, 'src, 'dst, T> {
+    pub src_cached: bool,
+    pub dest_cached: bool,
+    pub dcb: &'dcb ControlBlock,
+    pub src_buffer: &'src [T],
+    pub dest_buffer: &'dst mut [T],
+}
+
 pub struct Channel {
     dma: DMA,
-    /* TODO - hold on to ref in start(), return it in wait()
-     *adcb: Option<&'a ControlBlock>, */
 }
 
 impl Channel {
@@ -92,37 +100,74 @@ impl Channel {
         compiler_fence(Ordering::SeqCst);
     }
 
-    /// dcb_paddr - the physical address of the control block to load
-    /// NOTE: the physical address will be translated to a bus address for
-    /// the DMA engine
-    pub fn start(&mut self, dcb: &ControlBlock) {
-        let dcb_paddr = dcb as *const _ as u32;
+    pub fn start<'dcb, 'src, 'dst, T>(&mut self, res: &TransferResources<'dcb, 'src, 'dst, T>) {
         assert_eq!(
-            dcb_paddr & 0x1F,
+            res.dcb.as_paddr() & 0x1F,
             0,
             "Control block address must be 256 bit aligned"
         );
-        assert_ne!(dcb.src, 0, "Source address is NULL");
-        assert_ne!(dcb.dest, 0, "Destination address is NULL");
+        assert_ne!(res.dcb.src, 0, "Source address is NULL");
+        assert_ne!(res.dcb.dest, 0, "Destination address is NULL");
 
         if self.is_lite() {
             assert_eq!(
-                dcb.info.td_mode(),
+                res.dcb.info.td_mode(),
                 false,
                 "LITE channel doesn't support 2D mode"
             );
-            assert!(dcb.length.0 <= TRANSFER_LENGTH_MAX_LITE);
+            assert!(res.dcb.length.0 <= TRANSFER_LENGTH_MAX_LITE);
         } else {
-            if !dcb.info.td_mode() {
-                assert!(dcb.length.0 <= TRANSFER_LENGTH_MAX);
+            if !res.dcb.info.td_mode() {
+                assert!(res.dcb.length.0 <= TRANSFER_LENGTH_MAX);
             }
         }
 
-        unsafe { barrier::dsb(barrier::SY) };
+        compiler_fence(Ordering::Release);
+
+        unsafe {
+            cache::clean_and_invalidate_data_cache_range(
+                res.dcb.as_paddr(),
+                mem::size_of::<ControlBlock>(),
+            );
+        }
+
+        if res.src_cached {
+            // TODO - need to handle 2d mode
+            assert_eq!(
+                res.dcb.info.td_mode(),
+                false,
+                "2D mode caching not supported yet"
+            );
+            unsafe {
+                cache::clean_and_invalidate_data_cache_range(
+                    (res.dcb.src & !bus_address_bits::ALIAS_4_L2_COHERENT) as usize,
+                    res.dcb.length.0 as _,
+                );
+            }
+        }
+
+        if res.dest_cached {
+            // TODO - need to handle 2d mode
+            assert_eq!(
+                res.dcb.info.td_mode(),
+                false,
+                "2D mode caching not supported yet"
+            );
+            unsafe {
+                cache::clean_and_invalidate_data_cache_range(
+                    (res.dcb.dest & !bus_address_bits::ALIAS_4_L2_COHERENT) as usize,
+                    res.dcb.length.0 as _,
+                );
+            }
+        }
+
+        if !res.src_cached && !res.dest_cached {
+            unsafe { barrier::dsb(barrier::SY) };
+        }
 
         self.dma
             .dcb_addr
-            .write(dcb_paddr | bus_address_bits::ALIAS_4_L2_COHERENT);
+            .write(res.dcb.as_paddr() as u32 | bus_address_bits::ALIAS_4_L2_COHERENT);
 
         self.dma.cs.modify(ControlStatus::Active::Set);
     }

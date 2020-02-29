@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(asm, naked_functions)]
 
 extern crate embedded_hal as hal;
 

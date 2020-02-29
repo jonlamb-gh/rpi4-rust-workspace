@@ -63,6 +63,18 @@ impl fmt::Display for ControlBlock {
     }
 }
 
+impl ControlBlock {
+    #[inline]
+    pub fn as_ptr(&self) -> *const Self {
+        self as *const _
+    }
+
+    #[inline]
+    pub fn as_paddr(&self) -> usize {
+        self.as_ptr() as usize
+    }
+}
+
 bitfield! {
     #[repr(C)]
     pub struct TxfrInfoWord(u32);

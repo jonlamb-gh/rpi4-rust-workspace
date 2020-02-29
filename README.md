@@ -79,8 +79,8 @@ setenv imgname img.bin
 # Put it somewhere else, so we don't overwrite u-boot
 setenv loadaddr 0x0100000
 
-# Disable data cache because u-boot turns it on and my stuff isn't ready for it
-setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache off; go ${loadaddr}'
+# Make sure the caches are on
+setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache on; go ${loadaddr}'
 ```
 
 ## SD Card

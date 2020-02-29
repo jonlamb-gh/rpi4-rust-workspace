@@ -27,6 +27,11 @@ impl Descriptor {
     pub(crate) fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.buffer[..]
     }
+
+    #[inline]
+    pub fn as_paddr(&self) -> usize {
+        self.buffer.as_ptr() as usize
+    }
 }
 
 impl fmt::Display for Descriptor {
