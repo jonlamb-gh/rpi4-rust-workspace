@@ -3,6 +3,9 @@
 members = [
     "bcm2711",
     "bcm2711-hal",
+    "display",
+    "smoltcp-phy",
+    "rtsp",
     "raspi3_boot",
     "examples/uart0",
     "examples/uart1",
@@ -11,6 +14,7 @@ members = [
     "examples/analog-clock",
     "examples/eth",
     "examples/ip",
+    "examples/ipcam-viewer",
     "examples/mem2mem-dma",
 ]
 

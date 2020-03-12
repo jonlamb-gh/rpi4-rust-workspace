@@ -1,5 +1,5 @@
 [package]
-name = "ip"
+name = "ipcam-viewer"
 version = "0.1.0"
 authors = ["Jon Lamb"]
 edition = "2018"
@@ -29,6 +29,4 @@ features = [
     "socket-icmp",
     "socket-udp",
     "socket-tcp",
-    "log",
-    "verbose"
 ]

@@ -1,0 +1,22 @@
+[package]
+name = "smoltcp-phy"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../bcm2711-hal" }
+
+[dependencies.smoltcp]
+version = "0.6"
+default-features = false
+features = [
+    "ethernet",
+    "proto-ipv4",
+    "proto-ipv6",
+    "socket-icmp",
+    "socket-udp",
+    "socket-tcp",
+    #"log",
+    #"verbose"
+]

@@ -1,0 +1,16 @@
+[package]
+name = "rtsp"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+heapless = "0.5"
+
+[dependencies.nom]
+version = "5.1"
+default-features = false
+features = []
+
+[dev-dependencies]
+pretty_assertions = "0.6"

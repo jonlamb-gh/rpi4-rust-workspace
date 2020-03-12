@@ -1,3 +1,7 @@
+#![no_std]
+
+extern crate bcm2711_hal as hal;
+
 use crate::hal::bcm2711::genet::NUM_DMA_DESC;
 use crate::hal::eth::{Eth, RxPacket, MAX_MTU_SIZE};
 use core::intrinsics::transmute;
