@@ -79,7 +79,7 @@ fn main() -> std::io::Result<()> {
     loop {
         match socket.recv_from(&mut rx) {
             Ok((amt, src)) => {
-                println!("\n\nRx UDP {} bytes from {}", amt, src);
+                println!("Rx UDP {} bytes from {}", amt, src);
 
                 match rtp::Packet::new_checked(&rx[..amt]) {
                     Err(e) => panic!("rtp::Packet error {:?}", e),
