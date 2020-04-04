@@ -25,6 +25,9 @@ use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr, Ipv4Address};
 use smoltcp_phy::EthDevice;
 
+//TODO - move the load address to the top, where ever the videocode says the
+// top is so we can have more memory for the huge image data buffers
+
 static GLOBAL_LOGGER: SerialLogger = SerialLogger::new();
 
 // TODO - make generic Serial<UART, PINS>

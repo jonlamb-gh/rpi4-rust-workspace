@@ -10,6 +10,7 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [bcm2711-hal](bcm2711-hal/) : [embedded-hal](https://github.com/rust-embedded/embedded-hal) trait impls
 * [display](display/) : Double buffered DMA graphics/display library
 * [rtsp](rtsp/) : WIP RTSP library
+* [jpeg-decoder](jpeg-decoder/) : WIP JPEG decoder library
 * [raspi3_boot](raspi3_boot/) : Mostly copied from [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials)
 
 ## Examples

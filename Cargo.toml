@@ -6,6 +6,8 @@ members = [
     "display",
     "smoltcp-phy",
     "rtsp",
+    "rtp",
+    "rtp-jpeg-decoder",
     "raspi3_boot",
     "examples/uart0",
     "examples/uart1",
@@ -19,6 +21,7 @@ members = [
 ]
 
 [profile.release]
+# TODO - is this still needed?
 # Prevents unaligned access, see:
 # https://github.com/rust-lang/rust/issues/66897
 opt-level = 1
