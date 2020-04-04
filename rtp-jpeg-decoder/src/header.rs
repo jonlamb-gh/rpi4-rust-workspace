@@ -12,7 +12,7 @@ pub const MAIN_SIZE: usize = 8;
 /// Width and height are encoded in 8-pixel multiples.
 /// The maximum width is 2040 pixels.
 /// The maximum height is 2040 pixels.
-pub const WIDTH_HEIGHT_MULT: usize = 8;
+pub const WIDTH_HEIGHT_MULT: u16 = 8;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum Error {
@@ -124,16 +124,16 @@ impl<T: AsRef<[u8]>> Header<T> {
 
     /// Returns width in pixels
     #[inline]
-    pub fn width(&self) -> usize {
+    pub fn width(&self) -> u16 {
         let data = self.buffer.as_ref();
-        usize::from(data[field::WIDTH]) * WIDTH_HEIGHT_MULT
+        u16::from(data[field::WIDTH]) * WIDTH_HEIGHT_MULT
     }
 
     /// Returns height in pixels
     #[inline]
-    pub fn height(&self) -> usize {
+    pub fn height(&self) -> u16 {
         let data = self.buffer.as_ref();
-        usize::from(data[field::HEIGHT]) * WIDTH_HEIGHT_MULT
+        u16::from(data[field::HEIGHT]) * WIDTH_HEIGHT_MULT
     }
 }
 
