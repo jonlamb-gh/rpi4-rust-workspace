@@ -9,6 +9,13 @@ edition = "2018"
 [dependencies.rtp]
 path = "../rtp"
 
+[dependencies.nanojpeg-rs]
+git = "https://github.com/jonlamb-gh/nanojpeg-rs"
+branch = "master"
+
 [dependencies.byteorder]
 version = "1.3"
 default-features = false
+
+[dev-dependencies.rtsp]
+path = "../rtsp"

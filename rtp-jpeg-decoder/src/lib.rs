@@ -7,6 +7,7 @@
 
 use crate::header::Header;
 use byteorder::{BigEndian, ByteOrder};
+pub use nanojpeg_rs::{ImageInfo, NanoJPeg};
 pub use rtp;
 
 pub mod header;
@@ -18,6 +19,7 @@ pub enum Error {
     TableSize,
     RtpPayloadType(u8),
     Header(header::Error),
+    Decoder(nanojpeg_rs::Error),
 }
 
 /// JPEG payload type
@@ -27,7 +29,7 @@ pub const RTP_PAYLOAD_TYPE_JPEG: u8 = 26;
 
 #[derive(Debug)]
 pub struct JPEGDecoder<'b> {
-    // nanojpeg..
+    dec: NanoJPeg,
     /// Waits for the first packet with MARKER bit set, starts
     /// decoding on the following first frame packet
     first_marker_found: bool,
@@ -36,23 +38,24 @@ pub struct JPEGDecoder<'b> {
 }
 
 impl<'b> JPEGDecoder<'b> {
-    pub fn new(defrag_storage: &'b mut [u8]) -> Result<Self, Error> {
+    pub fn new(dec: NanoJPeg, defrag_storage: &'b mut [u8]) -> Result<Self, Error> {
         // TODO - update this
-        let min_size = LUMA_QTABLE.len() + CHROMA_QTABLE.len();
-
+        let min_size = 1024;
         if defrag_storage.len() < min_size {
             return Err(Error::StorageOverflow);
         }
 
         Ok(JPEGDecoder {
+            dec,
             first_marker_found: false,
             buffered: 0,
             buffer: defrag_storage,
         })
     }
 
-    // TODO - result type, pass up nanojpg info on full image decode
-    pub fn decode(&mut self, packet: &rtp::Packet<&[u8]>) -> Result<(), Error> {
+    pub fn decode(&mut self, packet: &rtp::Packet<&[u8]>) -> Result<Option<ImageInfo>, Error> {
+        // TODO - check len and version on packet
+
         let rtp_payload_type = packet.payload_type();
         if rtp_payload_type != RTP_PAYLOAD_TYPE_JPEG {
             return Err(Error::RtpPayloadType(rtp_payload_type));
@@ -62,8 +65,9 @@ impl<'b> JPEGDecoder<'b> {
             if packet.contains_marker() {
                 self.first_marker_found = true;
                 self.buffered = 0;
+                //println!("Found marker, starting to buffer");
             }
-            Ok(())
+            Ok(None)
         } else {
             let hdr = Header::new_checked(packet.payload())?;
 
@@ -77,6 +81,7 @@ impl<'b> JPEGDecoder<'b> {
             // Generate q tables and headers when first packet is recv'd
             if self.buffered == 0 {
                 self.generate_headers(&hdr)?;
+                //println!("Generated headers, buffered {}", self.buffered);
             }
 
             // Buffer the fragment
@@ -87,29 +92,34 @@ impl<'b> JPEGDecoder<'b> {
             self.buffer[self.buffered..self.buffered + payload_size].copy_from_slice(hdr.payload());
             self.buffered += payload_size;
 
-            // TODO - at the end, check for EOI Marker, write one if needed
+            //println!("payload_size {}", payload_size);
+            //println!("fragment_offset {}", hdr.fragment_offset());
+            //println!("buffered {}", self.buffered);
+
             if packet.contains_marker() {
-                // EOI ...
+                //println!("Found marker, fragment_offset {}", hdr.fragment_offset());
+                //println!("end-1 = 0x{:X}", self.buffer[self.buffered - 2]);
+                //println!("end = 0x{:X}", self.buffer[self.buffered - 1]);
+
+                // EOI
+                self.write_u8(0xFF)?;
+                self.write_segment(EOI, None)?;
+
+                // Reset
+                let buffer_size = self.buffered;
+                self.buffered = 0;
 
                 // Run it through the nanojpeg decoder
-                todo!();
+                let info = self.dec.decode(&self.buffer[..buffer_size])?;
+
+                return Ok(Some(info));
             }
 
-            todo!()
+            Ok(None)
         }
     }
 
     fn generate_headers(&mut self, hdr: &Header<&[u8]>) -> Result<(), Error> {
-        // MakeTables
-        //
-        // MakeHeaders
-        //   MakeQuantHeader
-        //   MakeHuffmanHeader
-        //   MakeDRIHeader
-        //
-        // the rust lib doest SOI, SOF, then DQT...
-        // the rfc does SOI, DQT.., then SOF
-
         let mut lqt = [0; 64];
         let mut cqt = [0; 64];
         make_tables(hdr.qvalue(), &mut lqt, &mut cqt)?;
@@ -125,21 +135,40 @@ impl<'b> JPEGDecoder<'b> {
         self.generate_frame_header(8, hdr.width(), hdr.height(), hdr.typ())?;
 
         // DHT's
+        self.generate_huffman_header(
+            DCCLASS,
+            LUMADESTINATION,
+            &STD_LUMA_DC_CODE_LENGTHS,
+            &STD_LUMA_DC_VALUES,
+        )?;
+        self.generate_huffman_header(
+            ACCLASS,
+            LUMADESTINATION,
+            &STD_LUMA_AC_CODE_LENGTHS,
+            &STD_LUMA_AC_VALUES,
+        )?;
+        self.generate_huffman_header(
+            DCCLASS,
+            CHROMADESTINATION,
+            &STD_CHROMA_DC_CODE_LENGTHS,
+            &STD_CHROMA_DC_VALUES,
+        )?;
+        self.generate_huffman_header(
+            ACCLASS,
+            CHROMADESTINATION,
+            &STD_CHROMA_AC_CODE_LENGTHS,
+            &STD_CHROMA_AC_VALUES,
+        )?;
 
-        todo!()
+        // SOS
+        self.generate_scan_header()?;
+        Ok(())
     }
 
     fn generate_quantization_header(&mut self, identifier: u8, qtable: &[u8]) -> Result<(), Error> {
         assert_eq!(qtable.len() % 64, 0);
         self.write_segment(DQT, Some(1 + qtable.len() as u16))?;
         self.write_u8(identifier)?;
-
-        // TODO - stuff from build_quantization_segment()
-        //
-        //let p = if precision == 8 { 0 } else { 1 };
-        //let pqtq = (p << 4) | identifier;
-        //self.write_u8(pqtq)?;
-
         for &i in &UNZIGZAG[..] {
             self.write_u8(qtable[i as usize])?;
         }
@@ -153,7 +182,7 @@ impl<'b> JPEGDecoder<'b> {
         height: u16,
         typ: u8,
     ) -> Result<(), Error> {
-        self.write_segment(SOF, Some(15))?; // TODO
+        self.write_segment(SOF, Some(15))?;
         self.write_u8(precision)?;
         self.write_u16(height)?;
         self.write_u16(width)?;
@@ -178,6 +207,42 @@ impl<'b> JPEGDecoder<'b> {
         self.write_u8(0x11)?; // hsamp = 1, vsamp = 1
         self.write_u8(1)?; // Quant table 1
 
+        Ok(())
+    }
+
+    fn generate_huffman_header(
+        &mut self,
+        class: u8,
+        destination: u8,
+        numcodes: &[u8],
+        values: &[u8],
+    ) -> Result<(), Error> {
+        self.write_segment(DHT, Some(1 + numcodes.len() as u16 + values.len() as u16))?;
+        let tcth = (class << 4) | destination;
+        self.write_u8(tcth)?;
+        assert_eq!(numcodes.len(), 16);
+        self.write_all(numcodes)?;
+        let mut sum = 0usize;
+        for &i in numcodes.iter() {
+            sum += i as usize;
+        }
+        assert_eq!(sum, values.len());
+        self.write_all(values)?;
+        Ok(())
+    }
+
+    fn generate_scan_header(&mut self) -> Result<(), Error> {
+        self.write_segment(SOS, Some(10))?;
+        self.write_u8(3)?; // 3 components
+        self.write_u8(0)?; // Component 0
+        self.write_u8(0)?; // Huffman table 0
+        self.write_u8(1)?; // Component 1
+        self.write_u8(0x11)?; // Huffman table 1
+        self.write_u8(2)?; // Component 2
+        self.write_u8(0x11)?; // Huffman table 1
+        self.write_u8(0)?;
+        self.write_u8(63)?;
+        self.write_u8(0)?;
         Ok(())
     }
 
@@ -275,6 +340,32 @@ impl From<header::Error> for Error {
     }
 }
 
+impl From<nanojpeg_rs::Error> for Error {
+    fn from(e: nanojpeg_rs::Error) -> Error {
+        Error::Decoder(e)
+    }
+}
+
+// Markers
+// Baseline DCT
+static SOF: u8 = 0xC0;
+// Huffman Tables
+static DHT: u8 = 0xC4;
+// Start of Image (standalone)
+static SOI: u8 = 0xD8;
+// End of image (standalone)
+static EOI: u8 = 0xD9;
+// Start of Scan
+static SOS: u8 = 0xDA;
+// Quantization Tables
+static DQT: u8 = 0xDB;
+
+static DCCLASS: u8 = 0;
+static ACCLASS: u8 = 1;
+
+static LUMADESTINATION: u8 = 0;
+static CHROMADESTINATION: u8 = 1;
+
 /// Table K.1
 #[rustfmt::skip]
 static LUMA_QTABLE: [u8; 64] = [
@@ -314,18 +405,58 @@ static UNZIGZAG: [u8; 64] = [
     53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
-// Markers
-// Baseline DCT
-static SOF: u8 = 0xC0;
-// Huffman Tables
-static DHT: u8 = 0xC4;
-// Start of Image (standalone)
-static SOI: u8 = 0xD8;
-// End of image (standalone)
-static EOI: u8 = 0xD9;
-// Start of Scan
-static SOS: u8 = 0xDA;
-// Quantization Tables
-static DQT: u8 = 0xDB;
-// Application segments start and end
-static APP0: u8 = 0xE0;
+// section K.3
+// Code lengths and values for table K.3
+static STD_LUMA_DC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x01, 0x05, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+static STD_LUMA_DC_VALUES: [u8; 12] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+];
+
+// Code lengths and values for table K.4
+static STD_CHROMA_DC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+];
+
+static STD_CHROMA_DC_VALUES: [u8; 12] = [
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B,
+];
+
+// Code lengths and values for table k.5
+static STD_LUMA_AC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x02, 0x01, 0x03, 0x03, 0x02, 0x04, 0x03, 0x05, 0x05, 0x04, 0x04, 0x00, 0x00, 0x01, 0x7D,
+];
+
+static STD_LUMA_AC_VALUES: [u8; 162] = [
+    0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13, 0x51, 0x61, 0x07,
+    0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xA1, 0x08, 0x23, 0x42, 0xB1, 0xC1, 0x15, 0x52, 0xD1, 0xF0,
+    0x24, 0x33, 0x62, 0x72, 0x82, 0x09, 0x0A, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x25, 0x26, 0x27, 0x28,
+    0x29, 0x2A, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+    0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+    0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+    0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3, 0xC4, 0xC5,
+    0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA, 0xE1, 0xE2,
+    0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8,
+    0xF9, 0xFA,
+];
+
+// Code lengths and values for table k.6
+static STD_CHROMA_AC_CODE_LENGTHS: [u8; 16] = [
+    0x00, 0x02, 0x01, 0x02, 0x04, 0x04, 0x03, 0x04, 0x07, 0x05, 0x04, 0x04, 0x00, 0x01, 0x02, 0x77,
+];
+static STD_CHROMA_AC_VALUES: [u8; 162] = [
+    0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51, 0x07, 0x61, 0x71,
+    0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xA1, 0xB1, 0xC1, 0x09, 0x23, 0x33, 0x52, 0xF0,
+    0x15, 0x62, 0x72, 0xD1, 0x0A, 0x16, 0x24, 0x34, 0xE1, 0x25, 0xF1, 0x17, 0x18, 0x19, 0x1A, 0x26,
+    0x27, 0x28, 0x29, 0x2A, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+    0x49, 0x4A, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+    0x69, 0x6A, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0xA2, 0xA3, 0xA4, 0xA5,
+    0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xC2, 0xC3,
+    0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7, 0xD8, 0xD9, 0xDA,
+    0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0xEA, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8,
+    0xF9, 0xFA,
+];
