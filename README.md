@@ -10,7 +10,8 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [bcm2711-hal](bcm2711-hal/) : [embedded-hal](https://github.com/rust-embedded/embedded-hal) trait impls
 * [display](display/) : Double buffered DMA graphics/display library
 * [rtsp](rtsp/) : WIP RTSP library
-* [jpeg-decoder](jpeg-decoder/) : WIP JPEG decoder library
+* [rtp](rtp/) : WIP RTP library
+* [rtp-jpeg-decoder](rtp-jpeg-decoder/) : WIP RTP JPEG decoder library
 * [raspi3_boot](raspi3_boot/) : Mostly copied from [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials)
 
 ## Examples
@@ -80,7 +81,7 @@ setenv imgname img.bin
 #setenv loadaddr 0x80000
 
 # Put it somewhere else, so we don't overwrite u-boot
-setenv loadaddr 0x0100000
+setenv loadaddr 0x01000000
 
 # Make sure the caches are on
 setenv bootimg 'tftp ${loadaddr} ${serverip}:${imgname}; dcache flush; dcache on; go ${loadaddr}'

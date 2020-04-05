@@ -16,7 +16,7 @@ fn main() -> std::io::Result<()> {
 
     println!("Connecting");
 
-    let mut stream = TcpStream::connect("192.168.1.64:554")?;
+    let mut stream = TcpStream::connect("127.0.0.1:554")?;
 
     let mut session: Option<Session> = None;
 
@@ -110,7 +110,7 @@ fn request_for_options() -> Request {
     Request {
         request_line: (
             Method::Options,
-            Uri::from("rtsp://192.168.1.64:554/streaming/channels/2"),
+            Uri::from("rtsp://127.0.0.1:554/streaming/channels/2"),
             Version::new(1, 0),
         )
             .into(),
@@ -127,7 +127,7 @@ fn request_for_describe() -> Request {
     Request {
         request_line: (
             Method::Describe,
-            Uri::from("rtsp://192.168.1.64:554/streaming/channels/2"),
+            Uri::from("rtsp://127.0.0.1:554/streaming/channels/2"),
             Version::new(1, 0),
         )
             .into(),
@@ -147,7 +147,7 @@ fn request_for_setup() -> Request {
     Request {
         request_line: (
             Method::Setup,
-            Uri::from("rtsp://192.168.1.64:554/streaming/channels/2/trackID=1"),
+            Uri::from("rtsp://127.0.0.1:554/streaming/channels/2/trackID=1"),
             Version::new(1, 0),
         )
             .into(),
@@ -167,7 +167,7 @@ fn request_for_play() -> Request {
     Request {
         request_line: (
             Method::Play,
-            Uri::from("rtsp://192.168.1.64:554/streaming/channels/2"),
+            Uri::from("rtsp://127.0.0.1:554/streaming/channels/2"),
             Version::new(1, 0),
         )
             .into(),

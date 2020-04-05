@@ -30,7 +30,7 @@ SECTIONS
     /* . = 0x80000; */
 
     /* When loading with u-boot, put it somewhere else as to not overwrite u-boot */
-    . = 0x0100000;
+    . = 0x01000000;
 
     .text :
     {

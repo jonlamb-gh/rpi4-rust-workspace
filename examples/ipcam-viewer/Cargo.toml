@@ -7,8 +7,23 @@ edition = "2018"
 [dependencies]
 bcm2711-hal = { path = "../../bcm2711-hal" }
 smoltcp-phy = { path = "../../smoltcp-phy" }
+heapless = "0.5"
 arr_macro = "0.1"
 nb = "0.1"
+
+[dependencies.rtsp]
+path = "../../rtsp"
+
+[dependencies.rtp-jpeg-decoder]
+path = "../../rtp-jpeg-decoder"
+
+# using core::alloc::Layout instead of alloc crate to avoid allocator requirements
+# just using the Heap object
+[dependencies.linked_list_allocator]
+default-features = false
+features = []
+git = "https://github.com/jonlamb-gh/linked-list-allocator.git"
+branch = "master"
 
 [dependencies.raspi3_boot]
 path = "../../raspi3_boot"
