@@ -129,6 +129,7 @@ fn kernel_entry() -> ! {
     unsafe {
         log::set_logger_racy(&GLOBAL_LOGGER)
             .map(|()| log::set_max_level(LevelFilter::Trace))
+            //.map(|()| log::set_max_level(LevelFilter::Error))
             .unwrap();
     }
 
@@ -345,10 +346,11 @@ fn kernel_entry() -> ! {
 
     info!("Run loop");
 
-    timer.start(400.hz());
+    // TODO
+    //timer.start(400.hz());
 
     loop {
-        block!(timer.wait()).unwrap();
+        //block!(timer.wait()).unwrap();
         let time = sys_counter.get_time();
 
         net.poll(time);
@@ -376,6 +378,9 @@ fn kernel_entry() -> ! {
                                     let b = image_info.image[idx + 2];
                                     display.set_pixel_at(idx / 3, &Rgb888::new(r, g, b));
                                 }
+
+                                // Move the DMA wait/block logic to the beginning
+                                // so that swap_buffers doesn't block until complete
                                 display.swap_buffers().unwrap();
                             }
                         },
