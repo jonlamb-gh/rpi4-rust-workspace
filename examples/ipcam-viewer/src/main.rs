@@ -3,6 +3,7 @@
 
 extern crate bcm2711_hal as hal;
 
+use crate::hal::bcm2711::genet::NUM_DMA_DESC;
 use crate::hal::bcm2711::gpio::GPIO;
 use crate::hal::bcm2711::mbox::MBOX;
 use crate::hal::bcm2711::sys_timer::SysTimer;
@@ -51,7 +52,7 @@ const CLIENT_PORT: u16 = 554;
 const UDP_SERVER_IP: Ipv4Address = Ipv4Address(SRC_IP);
 const UDP_SERVER_PORT: u16 = 49154;
 
-const HEAP_SIZE: usize = 5 * 720 * 480;
+const HEAP_SIZE: usize = 3 * 720 * 480 * 5;
 
 static GLOBAL_LOGGER: SerialLogger = SerialLogger::new();
 static mut MAP: LinearMap<usize, Layout, U256> = LinearMap(heapless::i::LinearMap::new());
@@ -216,8 +217,8 @@ fn kernel_entry() -> ! {
         TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer)
     };
 
-    let mut rx_meta = [UdpPacketMetadata::EMPTY];
-    let mut tx_meta = [UdpPacketMetadata::EMPTY];
+    let mut rx_meta: [UdpPacketMetadata; 32] = [UdpPacketMetadata::EMPTY; 32];
+    let mut tx_meta: [UdpPacketMetadata; 4] = [UdpPacketMetadata::EMPTY; 4];
     let udp_server_socket = {
         static mut UDP_RX_DATA: [u8; UDP_SOCKET_BUFFER_SIZE] = [0; UDP_SOCKET_BUFFER_SIZE];
         static mut UDP_TX_DATA: [u8; UDP_SOCKET_BUFFER_SIZE] = [0; UDP_SOCKET_BUFFER_SIZE];
@@ -270,34 +271,31 @@ fn kernel_entry() -> ! {
 
     timer.start(400.hz());
 
-    // TODO - seem to be dropping rx packets
-    // try reducing framerate
-    // might be in the eth driver impl...
-
     loop {
         block!(timer.wait()).unwrap();
         let time = sys_counter.get_time();
 
         net.poll(time);
 
-        net.recv_udp(|data| {
-            info!("UDP recvd {} bytes", data.len());
+        for _ in 0..NUM_DMA_DESC {
+            net.recv_udp(|data| {
+                info!("UDP recvd {} bytes", data.len());
 
-            match rtp::Packet::new_checked(data) {
-                //Err(e) => warn!("rtp::Packet error {:?}", e),
-                Err(e) => panic!("rtp::Packet error {:?}", e),
-                Ok(pkt) => match decoder.decode(&pkt) {
-                    //Err(e) => warn!("JPEGDecoder error {:?}", e),
-                    Err(e) => panic!("JPEGDecoder error {:?}", e),
-                    Ok(maybe_image) => match maybe_image {
-                        None => info!("Ok"),
-                        //Some(image_info) => info!("{}", image_info),
-                        Some(image_info) => panic!("{}", image_info),
+                match rtp::Packet::new_checked(data) {
+                    //Err(e) => warn!("rtp::Packet error {:?}", e),
+                    Err(e) => panic!("rtp::Packet error {:?}", e),
+                    Ok(pkt) => match decoder.decode(&pkt) {
+                        //Err(e) => warn!("JPEGDecoder error {:?}", e),
+                        Err(e) => panic!("JPEGDecoder error {:?}", e),
+                        Ok(maybe_image) => match maybe_image {
+                            None => info!("Ok"),
+                            Some(image_info) => info!("{}", image_info),
+                        },
                     },
-                },
-            }
-        })
-        .unwrap();
+                }
+            })
+            .unwrap();
+        }
     }
 }
 

@@ -7,7 +7,7 @@
 
 use crate::header::Header;
 use byteorder::{BigEndian, ByteOrder};
-use log::trace;
+use log::{trace, warn};
 pub use nanojpeg_rs::{ImageInfo, NanoJPeg};
 pub use rtp;
 
@@ -18,6 +18,7 @@ pub enum Error {
     BadFirstPacket,
     StorageOverflow,
     TableSize,
+    DroppedSequence,
     RtpPayloadType(u8),
     Header(header::Error),
     Decoder(nanojpeg_rs::Error),
@@ -34,7 +35,7 @@ pub struct JPEGDecoder<'b> {
     /// Waits for the first packet with MARKER bit set, starts
     /// decoding on the following first frame packet
     first_marker_found: bool,
-    //last_seq_num: u16, // TODO - warn/detect missing packets
+    last_seq_num: u16,
     buffered: usize,
     buffer: &'b mut [u8],
 }
@@ -50,9 +51,16 @@ impl<'b> JPEGDecoder<'b> {
         Ok(JPEGDecoder {
             dec,
             first_marker_found: false,
+            last_seq_num: 0,
             buffered: 0,
             buffer: defrag_storage,
         })
+    }
+
+    pub fn reset(&mut self) {
+        self.first_marker_found = false;
+        self.buffered = 0;
+        self.last_seq_num = 0;
     }
 
     pub fn decode(&mut self, packet: &rtp::Packet<&[u8]>) -> Result<Option<ImageInfo>, Error> {
@@ -70,6 +78,7 @@ impl<'b> JPEGDecoder<'b> {
             if packet.contains_marker() {
                 self.first_marker_found = true;
                 self.buffered = 0;
+                self.last_seq_num = packet.sequence_number();
                 trace!("Found marker, starting to buffer");
             }
             Ok(None)
@@ -77,11 +86,26 @@ impl<'b> JPEGDecoder<'b> {
             let hdr = Header::new_checked(packet.payload())?;
 
             if self.buffered == 0 && hdr.fragment_offset() != 0 {
+                warn!(
+                    "Buffered count {} does not match fragment offset {}, resetting",
+                    self.buffered,
+                    hdr.fragment_offset()
+                );
                 // Wait until next frame
-                self.first_marker_found = false;
-                self.buffered = 0;
-                return Err(Error::BadFirstPacket);
+                self.reset();
             }
+
+            if packet.sequence_number() != self.last_seq_num.wrapping_add(1) {
+                warn!(
+                    "Discontiguous sequence number {}, expected {}",
+                    packet.sequence_number(),
+                    self.last_seq_num.wrapping_add(1)
+                );
+                self.reset();
+                return Err(Error::DroppedSequence);
+            }
+
+            self.last_seq_num = packet.sequence_number();
 
             // Generate q tables and headers when first packet is recv'd
             if self.buffered == 0 {
@@ -103,8 +127,8 @@ impl<'b> JPEGDecoder<'b> {
 
             if packet.contains_marker() {
                 trace!("Found marker, fragment_offset {}", hdr.fragment_offset());
-                trace!("end-1 = 0x{:X}", self.buffer[self.buffered - 2]);
-                trace!("end = 0x{:X}", self.buffer[self.buffered - 1]);
+                //trace!("end-1 = 0x{:X}", self.buffer[self.buffered - 2]);
+                //trace!("end = 0x{:X}", self.buffer[self.buffered - 1]);
 
                 // EOI
                 self.write_u8(0xFF)?;

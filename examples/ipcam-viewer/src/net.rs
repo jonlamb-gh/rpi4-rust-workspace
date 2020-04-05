@@ -1,3 +1,5 @@
+use crate::hal::bcm2711::genet::NUM_DMA_DESC;
+use crate::hal::eth::MAX_MTU_SIZE;
 use crate::hal::time::Instant;
 use core::convert::TryFrom;
 use core::str;
@@ -13,7 +15,8 @@ use smoltcp_phy::EthDevice;
 pub const NEIGHBOR_CACHE_SIZE: usize = 32;
 pub const ROUTES_SIZE: usize = 4;
 pub const TCP_SOCKET_BUFFER_SIZE: usize = 1024;
-pub const UDP_SOCKET_BUFFER_SIZE: usize = 4096;
+// NUM_DMA_DESC * MAX_MTU_SIZE = 256 * 1536 = 393,216
+pub const UDP_SOCKET_BUFFER_SIZE: usize = NUM_DMA_DESC * MAX_MTU_SIZE;
 
 const TCP_TIMEOUT_DURATION: Option<smoltcp::time::Duration> =
     Some(smoltcp::time::Duration { millis: 5 * 1000 });
@@ -95,6 +98,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
     }
 
     // TODO - rate limit the TCP reconnect
+    // log a warning if a buffer was exhausted
     pub fn poll(&mut self, time: Instant) {
         let mut reconnect = false;
         let mut tcp_state = TcpState::Closed;
