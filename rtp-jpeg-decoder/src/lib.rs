@@ -72,6 +72,7 @@ impl<'b> JPEGDecoder<'b> {
         }
 
         trace!("sequence_number: {}", packet.sequence_number());
+        trace!("prev sequence_number: {}", self.last_seq_num);
         trace!("timestamp: {}", packet.timestamp());
 
         if !self.first_marker_found {
@@ -85,6 +86,8 @@ impl<'b> JPEGDecoder<'b> {
         } else {
             let hdr = Header::new_checked(packet.payload())?;
 
+            trace!("fragment_offset {}", hdr.fragment_offset());
+
             if self.buffered == 0 && hdr.fragment_offset() != 0 {
                 warn!(
                     "Buffered count {} does not match fragment offset {}, resetting",
@@ -93,6 +96,8 @@ impl<'b> JPEGDecoder<'b> {
                 );
                 // Wait until next frame
                 self.reset();
+                // TODO - return?
+                // only an issue if seq num doesn't match up?
             }
 
             if packet.sequence_number() != self.last_seq_num.wrapping_add(1) {
@@ -122,7 +127,6 @@ impl<'b> JPEGDecoder<'b> {
             self.buffered += payload_size;
 
             trace!("payload_size {}", payload_size);
-            trace!("fragment_offset {}", hdr.fragment_offset());
             trace!("buffered {}", self.buffered);
 
             if packet.contains_marker() {

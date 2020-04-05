@@ -4,7 +4,7 @@ use crate::hal::time::Instant;
 use core::convert::TryFrom;
 use core::str;
 use heapless::{consts::U512, String};
-use log::debug;
+use log::{debug, error, warn};
 use rtsp::*;
 use smoltcp::iface::EthernetInterface;
 use smoltcp::socket::{SocketHandle, SocketSet, TcpSocket, TcpState, UdpSocket};
@@ -16,7 +16,8 @@ pub const NEIGHBOR_CACHE_SIZE: usize = 32;
 pub const ROUTES_SIZE: usize = 4;
 pub const TCP_SOCKET_BUFFER_SIZE: usize = 1024;
 // NUM_DMA_DESC * MAX_MTU_SIZE = 256 * 1536 = 393,216
-pub const UDP_SOCKET_BUFFER_SIZE: usize = NUM_DMA_DESC * MAX_MTU_SIZE;
+pub const UDP_NUM_PACKETS: usize = NUM_DMA_DESC + 4;
+pub const UDP_SOCKET_BUFFER_SIZE: usize = UDP_NUM_PACKETS * MAX_MTU_SIZE;
 
 const TCP_TIMEOUT_DURATION: Option<smoltcp::time::Duration> =
     Some(smoltcp::time::Duration { millis: 5 * 1000 });
@@ -134,6 +135,12 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                 tcp_state = tcp_socket.state();
             }
+            Err(e) => match e {
+                //Error::Exhausted => error!("Socket buffer exhausted"),
+                Error::Exhausted => panic!("Socket buffer exhausted"),
+                Error::Dropped => warn!("Packet dropped"),
+                _ => (),
+            },
             _ => (),
         }
 

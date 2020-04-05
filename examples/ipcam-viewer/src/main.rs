@@ -3,13 +3,15 @@
 
 extern crate bcm2711_hal as hal;
 
-use crate::hal::bcm2711::genet::NUM_DMA_DESC;
+// TODO - hal prelude should deal with a lot of these
+use crate::hal::bcm2711::dma::{Enable, DMA};
 use crate::hal::bcm2711::gpio::GPIO;
 use crate::hal::bcm2711::mbox::MBOX;
 use crate::hal::bcm2711::sys_timer::SysTimer;
 use crate::hal::bcm2711::uart1::UART1;
 use crate::hal::cache;
 use crate::hal::clocks::Clocks;
+use crate::hal::dma;
 use crate::hal::eth::{self, Eth};
 use crate::hal::gpio::{Alternate, Pin14, Pin15, AF5};
 use crate::hal::mailbox::*;
@@ -24,6 +26,7 @@ use core::cell::UnsafeCell;
 use core::fmt::Write;
 use core::ptr;
 use core::slice;
+use display::{Display, Rgb888, SCRATCHPAD_MEM_MIN_SIZE};
 use heapless::consts::U256;
 use heapless::LinearMap;
 use linked_list_allocator::Heap;
@@ -40,8 +43,11 @@ use smoltcp_phy::EthDevice;
 mod net;
 
 // add config.txt memory split
+//
 // previously: 0x0010_0000
 // new       : 0x0100_0000
+//
+// TODO - inspect the binary and see how close things are
 
 const SRC_IP: [u8; 4] = [192, 168, 1, 72];
 const DST_IP: [u8; 4] = [192, 168, 1, 64];
@@ -135,6 +141,14 @@ fn kernel_entry() -> ! {
 
     info!("{:#?}", clocks);
 
+    // Construct the DMA peripheral, reset and enable CH0
+    let dma = DMA::new();
+    let mut dma_parts = dma.split();
+    dma_parts.enable.enable.modify(Enable::En0::Set);
+    let mut dma_chan = dma_parts.ch0;
+    dma_chan.reset();
+    info!("DMA Channel ID: 0x{:X}", dma_chan.id());
+
     let arm_mem = get_arm_mem(&mut mbox);
     info!(
         "ARM memory\n  address: {:#010X} size: 0x{:X}",
@@ -148,6 +162,68 @@ fn kernel_entry() -> ! {
         vc_mem.address(),
         vc_mem.size()
     );
+
+    info!("Requesting framebuffer allocation");
+
+    let fb = alloc_framebuffer(&mut mbox);
+
+    info!(
+        "width: {} height: {} pitch {} {:?}",
+        fb.virt_width,
+        fb.virt_height,
+        fb.pitch(),
+        fb.pixel_order,
+    );
+
+    info!(
+        "fb address: {:#010X} bus_address: {:#010X} size: 0x{:X}",
+        fb.alloc_buffer_address(),
+        fb.alloc_buffer_bus_address(),
+        fb.alloc_buffer_size()
+    );
+
+    // TODO - feature for nanojpeg to produce RGB/BGR 32 bpp data so
+    // we can DMA it directly instead of copying the RGB24 into BGR32
+    let vc_mem_size = fb.alloc_buffer_size();
+    let vc_mem_words = vc_mem_size / 4;
+    info!("bytes {} - words {}", vc_mem_size, vc_mem_words,);
+    let frontbuffer_mem = unsafe {
+        core::slice::from_raw_parts_mut(fb.alloc_buffer_address() as *mut u32, vc_mem_words)
+    };
+
+    const STATIC_SIZE: usize = 640 * 480 * 4;
+    assert!(vc_mem_size <= STATIC_SIZE);
+
+    let dcb_mem = unsafe {
+        static mut DCB_MEM: [dma::ControlBlock; 1] = [dma::ControlBlock::new()];
+        &mut DCB_MEM[..]
+    };
+
+    let backbuffer_mem = unsafe {
+        static mut BACKBUFFER_MEM: [u32; STATIC_SIZE / 4] = [0; STATIC_SIZE / 4];
+        &mut BACKBUFFER_MEM[..]
+    };
+
+    let scratchpad_mem = unsafe {
+        static mut SCRATCHPAD_MEM: [u32; SCRATCHPAD_MEM_MIN_SIZE / 4] =
+            [0; SCRATCHPAD_MEM_MIN_SIZE / 4];
+        &mut SCRATCHPAD_MEM[..]
+    };
+
+    let mut display = Display::new(
+        fb,
+        dma_chan,
+        dcb_mem,
+        scratchpad_mem,
+        &mut backbuffer_mem[..vc_mem_words],
+        &mut frontbuffer_mem[..vc_mem_words],
+    )
+    .unwrap();
+
+    // Clear back and front buffers
+    display.clear_screen().unwrap();
+
+    info!("Display initialized");
 
     let ethernet_addr = EthernetAddress::from_bytes(get_mac_address(&mut mbox).mac_address());
     info!("MAC address: {}", ethernet_addr);
@@ -217,7 +293,8 @@ fn kernel_entry() -> ! {
         TcpSocket::new(tcp_rx_buffer, tcp_tx_buffer)
     };
 
-    let mut rx_meta: [UdpPacketMetadata; 32] = [UdpPacketMetadata::EMPTY; 32];
+    let mut rx_meta: [UdpPacketMetadata; UDP_NUM_PACKETS] =
+        [UdpPacketMetadata::EMPTY; UDP_NUM_PACKETS];
     let mut tx_meta: [UdpPacketMetadata; 4] = [UdpPacketMetadata::EMPTY; 4];
     let udp_server_socket = {
         static mut UDP_RX_DATA: [u8; UDP_SOCKET_BUFFER_SIZE] = [0; UDP_SOCKET_BUFFER_SIZE];
@@ -241,7 +318,6 @@ fn kernel_entry() -> ! {
     info!("IP address: {}", ip);
 
     let rtsp_string = rtsp_string();
-
     let mut net = Net::new(
         iface,
         sockets,
@@ -277,7 +353,7 @@ fn kernel_entry() -> ! {
 
         net.poll(time);
 
-        for _ in 0..NUM_DMA_DESC {
+        for _ in 0..UDP_NUM_PACKETS {
             net.recv_udp(|data| {
                 info!("UDP recvd {} bytes", data.len());
 
@@ -289,7 +365,19 @@ fn kernel_entry() -> ! {
                         Err(e) => panic!("JPEGDecoder error {:?}", e),
                         Ok(maybe_image) => match maybe_image {
                             None => info!("Ok"),
-                            Some(image_info) => info!("{}", image_info),
+                            Some(image_info) => {
+                                info!("{}", image_info);
+                                assert_eq!(image_info.image.len() / 3, 640 * 480);
+
+                                // Write RGB24 into 32 bit pixel location
+                                for idx in (0..image_info.image.len()).step_by(3) {
+                                    let r = image_info.image[idx];
+                                    let g = image_info.image[idx + 1];
+                                    let b = image_info.image[idx + 2];
+                                    display.set_pixel_at(idx / 3, &Rgb888::new(r, g, b));
+                                }
+                                display.swap_buffers().unwrap();
+                            }
                         },
                     },
                 }
@@ -335,6 +423,19 @@ fn get_vc_mem(mbox: &mut Mailbox) -> GetVcMemRepr {
     }
 }
 
+fn alloc_framebuffer(mbox: &mut Mailbox) -> AllocFramebufferRepr {
+    let mut req = AllocFramebufferRepr::default();
+    req.phy_width = 640;
+    req.virt_width = 640;
+    let resp = mbox.call(Channel::Prop, &req).expect("MBox call()");
+
+    if let RespMsg::AllocFramebuffer(repr) = resp {
+        repr
+    } else {
+        panic!("Invalid response\n{:#?}", resp);
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn njAllocMem(size: ctypes::c_int) -> *mut ctypes::c_void {
     // TODO
@@ -346,9 +447,9 @@ pub unsafe extern "C" fn njAllocMem(size: ctypes::c_int) -> *mut ctypes::c_void 
         return ptr::null_mut();
     }
 
-    debug!("malloc size {}", size);
+    //debug!("malloc size {}", size);
     let size = roundup(size, MIN_ALIGN);
-    debug!(" -- aligned size {}", size);
+    //debug!(" -- aligned size {}", size);
     let layout = layout_from_size_align(size as usize, MIN_ALIGN);
     let ptr = HEAP
         .allocate_first_fit(layout.clone())
@@ -361,20 +462,20 @@ pub unsafe extern "C" fn njAllocMem(size: ctypes::c_int) -> *mut ctypes::c_void 
     } else {
         panic!("Heap out of memory, WMARK = {}", WMARK);
     }
-    debug!(" -- WMARK {}", WMARK);
-    debug!(" -- at {:?}", ptr);
+    //debug!(" -- WMARK {}", WMARK);
+    //debug!(" -- at {:?}", ptr);
     ptr as *mut ctypes::c_void
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn njFreeMem(ptr: *mut ctypes::c_void) {
-    debug!("free {:?}", ptr);
+    //debug!("free {:?}", ptr);
     if ptr.is_null() {
         return;
     }
     let layout = get_layout(ptr as *mut u8);
     WMARK += layout.size();
-    debug!(" ++ WMARK {}", WMARK);
+    //debug!(" ++ WMARK {}", WMARK);
     delete_layout(ptr as *mut u8);
     HEAP.deallocate(ptr::NonNull::new_unchecked(ptr as *mut u8), layout);
 }
@@ -431,17 +532,17 @@ unsafe fn layout_from_size_align(size: usize, align: usize) -> Layout {
 }
 
 unsafe fn insert_layout(ptr: *mut u8, layout: Layout) {
-    debug!("Insert layout {:?} : {:?}", ptr, layout);
+    //debug!("Insert layout {:?} : {:?}", ptr, layout);
     let _ = MAP.insert(ptr as usize, layout).expect("TODO");
 }
 
 unsafe fn get_layout(ptr: *mut u8) -> Layout {
-    debug!("Get layout {:?}", ptr);
+    //debug!("Get layout {:?}", ptr);
     MAP.get(&(ptr as usize)).expect("TODO").clone()
 }
 
 unsafe fn delete_layout(ptr: *mut u8) {
-    debug!("Delete layout {:?}", ptr);
+    //debug!("Delete layout {:?}", ptr);
     let _ = MAP.remove(&(ptr as usize)).expect("TODO");
 }
 

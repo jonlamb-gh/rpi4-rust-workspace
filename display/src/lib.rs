@@ -6,7 +6,7 @@ pub extern crate embedded_graphics;
 use crate::hal::cache;
 use crate::hal::dma;
 use crate::hal::mailbox::{AllocFramebufferRepr, PixelOrder};
-use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
+pub use embedded_graphics::pixelcolor::{Rgb888, RgbColor};
 use embedded_graphics::prelude::*;
 use embedded_graphics::DrawTarget;
 
@@ -184,6 +184,20 @@ impl<'a> Display<'a> {
 
         // The backbuffer is contiguous
         let offset = (y * self.width()) + x;
+        self.backbuffer_mem[offset as usize] = color_word;
+    }
+
+    /// Sets a pixel in the backbuffer
+    #[inline]
+    pub fn set_pixel_at<C: RgbColor>(&mut self, offset: usize, color: &C) {
+        let color_word = Self::pixel_word(self.pixel_order(), color);
+
+        // The frontbuffer, may not be contiguous so must use pitch (pitch >= bpp*width)
+        // let offset = (y * (self.pitch / 4)) + x;
+        // unsafe { ptr::write(self.framebuffer.as_mut_ptr()
+        // .offset(offset as _), color_word) };
+
+        // The backbuffer is contiguous
         self.backbuffer_mem[offset as usize] = color_word;
     }
 
