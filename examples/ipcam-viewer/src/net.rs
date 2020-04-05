@@ -16,7 +16,7 @@ pub const NEIGHBOR_CACHE_SIZE: usize = 32;
 pub const ROUTES_SIZE: usize = 4;
 pub const TCP_SOCKET_BUFFER_SIZE: usize = 1024;
 // NUM_DMA_DESC * MAX_MTU_SIZE = 256 * 1536 = 393,216
-pub const UDP_NUM_PACKETS: usize = NUM_DMA_DESC + 4;
+pub const UDP_NUM_PACKETS: usize = NUM_DMA_DESC + 64;
 pub const UDP_SOCKET_BUFFER_SIZE: usize = UDP_NUM_PACKETS * MAX_MTU_SIZE;
 
 const TCP_TIMEOUT_DURATION: Option<smoltcp::time::Duration> =
@@ -144,6 +144,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
             _ => (),
         }
 
+        // TODO - need to manage the TCP connection
         // TODO - clean this up
         // - do a teardown first to cleanup?
         if tcp_state == TcpState::Established {

@@ -192,7 +192,7 @@ fn kernel_entry() -> ! {
         core::slice::from_raw_parts_mut(fb.alloc_buffer_address() as *mut u32, vc_mem_words)
     };
 
-    const STATIC_SIZE: usize = 640 * 480 * 4;
+    const STATIC_SIZE: usize = 320 * 240 * 4;
     assert!(vc_mem_size <= STATIC_SIZE);
 
     let dcb_mem = unsafe {
@@ -346,14 +346,15 @@ fn kernel_entry() -> ! {
 
     info!("Run loop");
 
-    // TODO
-    //timer.start(400.hz());
+    timer.start(200.hz());
 
     loop {
+        // TODO
         //block!(timer.wait()).unwrap();
-        let time = sys_counter.get_time();
-
-        net.poll(time);
+        if timer.wait().is_ok() {
+            let time = sys_counter.get_time();
+            net.poll(time);
+        }
 
         for _ in 0..UDP_NUM_PACKETS {
             net.recv_udp(|data| {
@@ -363,13 +364,13 @@ fn kernel_entry() -> ! {
                     //Err(e) => warn!("rtp::Packet error {:?}", e),
                     Err(e) => panic!("rtp::Packet error {:?}", e),
                     Ok(pkt) => match decoder.decode(&pkt) {
-                        //Err(e) => warn!("JPEGDecoder error {:?}", e),
-                        Err(e) => panic!("JPEGDecoder error {:?}", e),
+                        Err(e) => warn!("JPEGDecoder error {:?}", e),
+                        //Err(e) => panic!("JPEGDecoder error {:?}", e),
                         Ok(maybe_image) => match maybe_image {
                             None => info!("Ok"),
                             Some(image_info) => {
                                 info!("{}", image_info);
-                                assert_eq!(image_info.image.len() / 3, 640 * 480);
+                                assert_eq!(image_info.image.len() / 3, 320 * 240);
 
                                 // Write RGB24 into 32 bit pixel location
                                 for idx in (0..image_info.image.len()).step_by(3) {
@@ -430,8 +431,10 @@ fn get_vc_mem(mbox: &mut Mailbox) -> GetVcMemRepr {
 
 fn alloc_framebuffer(mbox: &mut Mailbox) -> AllocFramebufferRepr {
     let mut req = AllocFramebufferRepr::default();
-    req.phy_width = 640;
-    req.virt_width = 640;
+    req.phy_width = 320;
+    req.virt_width = 320;
+    req.phy_height = 240;
+    req.virt_height = 240;
     let resp = mbox.call(Channel::Prop, &req).expect("MBox call()");
 
     if let RespMsg::AllocFramebuffer(repr) = resp {
