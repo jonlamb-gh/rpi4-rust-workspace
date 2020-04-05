@@ -134,6 +134,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
         }
 
         // TODO - clean this up
+        // - do a teardown first to cleanup?
         if tcp_state == TcpState::Established {
             let mut tcp_socket = self.sockets.get::<TcpSocket>(self.tcp_handle);
 

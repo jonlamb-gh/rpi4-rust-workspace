@@ -1,4 +1,6 @@
 // TODO - make a proper example
+// RUST_LOG=trace
+// cargo run --example rtsp-decode --target x86_64-unknown-linux-gnu
 
 use rtp_jpeg_decoder::*;
 use rtsp::*;
@@ -9,6 +11,8 @@ use std::net::{Shutdown, TcpStream};
 use std::str;
 
 fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let mut frame_buffer = vec![0; 65536];
 
     let dec = NanoJPeg::init();

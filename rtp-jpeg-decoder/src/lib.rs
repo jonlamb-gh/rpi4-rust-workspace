@@ -7,6 +7,7 @@
 
 use crate::header::Header;
 use byteorder::{BigEndian, ByteOrder};
+use log::trace;
 pub use nanojpeg_rs::{ImageInfo, NanoJPeg};
 pub use rtp;
 
@@ -33,6 +34,7 @@ pub struct JPEGDecoder<'b> {
     /// Waits for the first packet with MARKER bit set, starts
     /// decoding on the following first frame packet
     first_marker_found: bool,
+    //last_seq_num: u16, // TODO - warn/detect missing packets
     buffered: usize,
     buffer: &'b mut [u8],
 }
@@ -61,11 +63,14 @@ impl<'b> JPEGDecoder<'b> {
             return Err(Error::RtpPayloadType(rtp_payload_type));
         }
 
+        trace!("sequence_number: {}", packet.sequence_number());
+        trace!("timestamp: {}", packet.timestamp());
+
         if !self.first_marker_found {
             if packet.contains_marker() {
                 self.first_marker_found = true;
                 self.buffered = 0;
-                //println!("Found marker, starting to buffer");
+                trace!("Found marker, starting to buffer");
             }
             Ok(None)
         } else {
@@ -81,7 +86,7 @@ impl<'b> JPEGDecoder<'b> {
             // Generate q tables and headers when first packet is recv'd
             if self.buffered == 0 {
                 self.generate_headers(&hdr)?;
-                //println!("Generated headers, buffered {}", self.buffered);
+                trace!("Generated headers, buffered {}", self.buffered);
             }
 
             // Buffer the fragment
@@ -92,14 +97,14 @@ impl<'b> JPEGDecoder<'b> {
             self.buffer[self.buffered..self.buffered + payload_size].copy_from_slice(hdr.payload());
             self.buffered += payload_size;
 
-            //println!("payload_size {}", payload_size);
-            //println!("fragment_offset {}", hdr.fragment_offset());
-            //println!("buffered {}", self.buffered);
+            trace!("payload_size {}", payload_size);
+            trace!("fragment_offset {}", hdr.fragment_offset());
+            trace!("buffered {}", self.buffered);
 
             if packet.contains_marker() {
-                //println!("Found marker, fragment_offset {}", hdr.fragment_offset());
-                //println!("end-1 = 0x{:X}", self.buffer[self.buffered - 2]);
-                //println!("end = 0x{:X}", self.buffer[self.buffered - 1]);
+                trace!("Found marker, fragment_offset {}", hdr.fragment_offset());
+                trace!("end-1 = 0x{:X}", self.buffer[self.buffered - 2]);
+                trace!("end = 0x{:X}", self.buffer[self.buffered - 1]);
 
                 // EOI
                 self.write_u8(0xFF)?;

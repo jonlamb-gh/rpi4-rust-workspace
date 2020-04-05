@@ -270,6 +270,10 @@ fn kernel_entry() -> ! {
 
     timer.start(400.hz());
 
+    // TODO - seem to be dropping rx packets
+    // try reducing framerate
+    // might be in the eth driver impl...
+
     loop {
         block!(timer.wait()).unwrap();
         let time = sys_counter.get_time();
