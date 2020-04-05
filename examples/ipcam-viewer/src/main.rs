@@ -26,12 +26,10 @@ use core::cell::UnsafeCell;
 use core::fmt::Write;
 use core::ptr;
 use core::slice;
-use display::{Display, Rgb888, SCRATCHPAD_MEM_MIN_SIZE};
 use heapless::consts::U256;
 use heapless::LinearMap;
 use linked_list_allocator::Heap;
 use log::{debug, info, warn, LevelFilter, Metadata, Record};
-use nb::block;
 use rtp_jpeg_decoder::*;
 use smoltcp::iface::{EthernetInterfaceBuilder, NeighborCache, Routes};
 use smoltcp::socket::{
@@ -48,6 +46,9 @@ mod net;
 // new       : 0x0100_0000
 //
 // TODO - inspect the binary and see how close things are
+
+const WIDTH: usize = 320;
+const HEIGHT: usize = 240;
 
 const SRC_IP: [u8; 4] = [192, 168, 1, 72];
 const DST_IP: [u8; 4] = [192, 168, 1, 64];
@@ -183,6 +184,9 @@ fn kernel_entry() -> ! {
         fb.alloc_buffer_size()
     );
 
+    assert_eq!(fb.virt_width, WIDTH);
+    assert_eq!(fb.virt_height, HEIGHT);
+
     // TODO - feature for nanojpeg to produce RGB/BGR 32 bpp data so
     // we can DMA it directly instead of copying the RGB24 into BGR32
     let vc_mem_size = fb.alloc_buffer_size();
@@ -192,37 +196,13 @@ fn kernel_entry() -> ! {
         core::slice::from_raw_parts_mut(fb.alloc_buffer_address() as *mut u32, vc_mem_words)
     };
 
-    const STATIC_SIZE: usize = 320 * 240 * 4;
+    const STATIC_SIZE: usize = WIDTH * HEIGHT * 4;
     assert!(vc_mem_size <= STATIC_SIZE);
 
     let dcb_mem = unsafe {
         static mut DCB_MEM: [dma::ControlBlock; 1] = [dma::ControlBlock::new()];
         &mut DCB_MEM[..]
     };
-
-    let backbuffer_mem = unsafe {
-        static mut BACKBUFFER_MEM: [u32; STATIC_SIZE / 4] = [0; STATIC_SIZE / 4];
-        &mut BACKBUFFER_MEM[..]
-    };
-
-    let scratchpad_mem = unsafe {
-        static mut SCRATCHPAD_MEM: [u32; SCRATCHPAD_MEM_MIN_SIZE / 4] =
-            [0; SCRATCHPAD_MEM_MIN_SIZE / 4];
-        &mut SCRATCHPAD_MEM[..]
-    };
-
-    let mut display = Display::new(
-        fb,
-        dma_chan,
-        dcb_mem,
-        scratchpad_mem,
-        &mut backbuffer_mem[..vc_mem_words],
-        &mut frontbuffer_mem[..vc_mem_words],
-    )
-    .unwrap();
-
-    // Clear back and front buffers
-    display.clear_screen().unwrap();
 
     info!("Display initialized");
 
@@ -344,6 +324,36 @@ fn kernel_entry() -> ! {
     let dec = NanoJPeg::init();
     let mut decoder = JPEGDecoder::new(dec, fragment_storage).unwrap();
 
+    let bbp: usize = 4;
+    let frontbuffer_stride = (fb.pitch() - (fb.virt_width * bbp)) as u32;
+    let src_stride = 0;
+
+    let transfer_length = dma::TransferLength::Mode2D(
+        // Transfer length in bytes of a row
+        (bbp * fb.virt_width) as _,
+        // How many x-length transfers are performed
+        (fb.virt_height - 1) as _,
+    );
+
+    // Initialize a DMA control block for the transfer
+    let dcb = &mut dcb_mem[0];
+    dcb.init();
+    dcb.set_length(transfer_length);
+    dcb.set_src_width(dma::TransferWidth::Bits128);
+    dcb.stride.set_src_stride(src_stride);
+    dcb.info.set_src_inc(true);
+    dcb.set_dest(frontbuffer_mem.as_ptr() as u32);
+    dcb.set_dest_width(dma::TransferWidth::Bits128);
+    dcb.stride.set_dest_stride(frontbuffer_stride);
+    dcb.info.set_dest_inc(true);
+    dcb.info.set_wait_resp(true);
+    dcb.info.set_burst_len(4);
+
+    // TODO - hack until I redo the DMA impl
+    // src/dst refs are not used
+    let unused_src_buffer: [u32; 0] = [];
+    let mut unused_dest_buffer: [u32; 0] = [];
+
     info!("Run loop");
 
     timer.start(200.hz());
@@ -370,19 +380,33 @@ fn kernel_entry() -> ! {
                             None => info!("Ok"),
                             Some(image_info) => {
                                 info!("{}", image_info);
-                                assert_eq!(image_info.image.len() / 3, 320 * 240);
+                                assert_eq!(image_info.image.len() / 4, WIDTH * HEIGHT);
 
-                                // Write RGB24 into 32 bit pixel location
-                                for idx in (0..image_info.image.len()).step_by(3) {
-                                    let r = image_info.image[idx];
-                                    let g = image_info.image[idx + 1];
-                                    let b = image_info.image[idx + 2];
-                                    display.set_pixel_at(idx / 3, &Rgb888::new(r, g, b));
+                                dcb.set_src(image_info.image.as_ptr() as u32);
+
+                                unsafe {
+                                    cache::clean_data_cache_range(
+                                        image_info.image.as_ptr() as _,
+                                        image_info.image.len(),
+                                    );
                                 }
 
-                                // Move the DMA wait/block logic to the beginning
-                                // so that swap_buffers doesn't block until complete
-                                display.swap_buffers().unwrap();
+                                let txfr_res = dma::TransferResources {
+                                    src_cached: false,
+                                    dest_cached: false,
+                                    dcb: &dcb,
+                                    src_buffer: &unused_src_buffer,
+                                    dest_buffer: &mut unused_dest_buffer,
+                                };
+
+                                // Wait for DMA to be ready, then do the transfer
+                                while dma_chan.is_busy() == true {
+                                    hal::cortex_a::asm::nop();
+                                }
+                                dma_chan.start(&txfr_res);
+                                dma_chan.wait();
+
+                                assert!(!dma_chan.errors());
                             }
                         },
                     },
@@ -431,10 +455,10 @@ fn get_vc_mem(mbox: &mut Mailbox) -> GetVcMemRepr {
 
 fn alloc_framebuffer(mbox: &mut Mailbox) -> AllocFramebufferRepr {
     let mut req = AllocFramebufferRepr::default();
-    req.phy_width = 320;
-    req.virt_width = 320;
-    req.phy_height = 240;
-    req.virt_height = 240;
+    req.phy_width = WIDTH;
+    req.virt_width = WIDTH;
+    req.phy_height = HEIGHT;
+    req.virt_height = HEIGHT;
     let resp = mbox.call(Channel::Prop, &req).expect("MBox call()");
 
     if let RespMsg::AllocFramebuffer(repr) = resp {

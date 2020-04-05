@@ -7,16 +7,12 @@ edition = "2018"
 [dependencies]
 heapless = "0.5"
 arr_macro = "0.1"
-nb = "0.1"
 
 [dependencies.bcm2711-hal]
 path = "../../bcm2711-hal"
 
 [dependencies.smoltcp-phy]
 path = "../../smoltcp-phy"
-
-[dependencies.display]
-path = "../../display"
 
 [dependencies.rtsp]
 path = "../../rtsp"

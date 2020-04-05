@@ -13,7 +13,7 @@ path = "../rtp"
 git = "https://github.com/jonlamb-gh/nanojpeg-rs"
 branch = "master"
 default-features = false
-features = []
+features = ["bpp32", "bgr"]
 
 [dependencies.byteorder]
 version = "1.3"
