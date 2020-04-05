@@ -129,8 +129,9 @@ fn kernel_entry() -> ! {
     GLOBAL_LOGGER.set_inner(serial);
     unsafe {
         log::set_logger_racy(&GLOBAL_LOGGER)
-            .map(|()| log::set_max_level(LevelFilter::Trace))
+            //.map(|()| log::set_max_level(LevelFilter::Trace))
             //.map(|()| log::set_max_level(LevelFilter::Error))
+            .map(|()| log::set_max_level(LevelFilter::Warn))
             .unwrap();
     }
 
@@ -356,7 +357,7 @@ fn kernel_entry() -> ! {
 
     info!("Run loop");
 
-    timer.start(200.hz());
+    timer.start(500.hz());
 
     loop {
         // TODO

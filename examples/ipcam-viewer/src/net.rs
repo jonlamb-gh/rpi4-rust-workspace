@@ -34,6 +34,7 @@ pub enum RtspState {
     RequestDescribe,
     RequestSetup,
     RequestPlay,
+    Streaming,
 }
 
 pub type RtspString = String<U512>;
@@ -99,7 +100,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
     }
 
     // TODO - rate limit the TCP reconnect
-    // log a warning if a buffer was exhausted
+    // - figure out why the TCP connection is dropping
     pub fn poll(&mut self, time: Instant) {
         let mut reconnect = false;
         let mut tcp_state = TcpState::Closed;
@@ -124,13 +125,15 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                     self.tcp_was_connected = true
                 } else if (!tcp_socket.is_active() && self.tcp_was_connected) || remote_disconnected
                 {
-                    debug!("TCP disconnected");
+                    warn!("TCP disconnected");
                     self.tcp_was_connected = false;
                     if remote_disconnected {
                         tcp_socket.close();
                     }
                     tcp_socket.abort();
+                    self.rtsp_state = RtspState::RequestOptions;
                     reconnect = true;
+                    panic!("TODO - figure out the disconnection issue first");
                 }
 
                 tcp_state = tcp_socket.state();
@@ -186,7 +189,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                                 Method::Describe => self.rtsp_state = RtspState::RequestSetup,
                                 Method::Setup => self.rtsp_state = RtspState::RequestPlay,
                                 Method::Play => {
-                                    debug!("Got PLAY response, should be streaming now")
+                                    self.rtsp_state = RtspState::Streaming;
+                                    debug!("Got PLAY response, should be streaming now");
                                 }
                                 _ => (),
                             }
@@ -265,6 +269,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                     self.rtsp_state = RtspState::WaitForResponse(Method::Play);
                 }
+                RtspState::Streaming => (),
             }
         }
 
