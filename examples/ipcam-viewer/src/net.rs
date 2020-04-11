@@ -1,3 +1,5 @@
+// TODO - redo most of this, still needs better connection managmenent
+
 use crate::hal::bcm2711::genet::NUM_DMA_DESC;
 use crate::hal::eth::MAX_MTU_SIZE;
 use crate::hal::time::{Duration, Instant};
@@ -192,9 +194,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                 tcp_state = tcp_socket.state();
             }
             Err(e) => match e {
-                Error::Exhausted => warn!("Socket buffer exhausted"),
-                Error::Dropped => warn!("Packet dropped"),
-                _ => (),
+                Error::Unrecognized => (),
+                _ => warn!("smoltcp::Error {:?}", e),
             },
             _ => (),
         }
