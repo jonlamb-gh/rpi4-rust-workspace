@@ -32,6 +32,7 @@ pub const RTP_PAYLOAD_TYPE_JPEG: u8 = 26;
 #[derive(Debug)]
 pub struct JPEGDecoder<'b> {
     dec: NanoJPeg,
+    dec_count: usize,
     /// Waits for the first packet with MARKER bit set, starts
     /// decoding on the following first frame packet
     first_marker_found: bool,
@@ -50,6 +51,7 @@ impl<'b> JPEGDecoder<'b> {
 
         Ok(JPEGDecoder {
             dec,
+            dec_count: 0,
             first_marker_found: false,
             last_seq_num: 0,
             buffered: 0,
@@ -61,6 +63,7 @@ impl<'b> JPEGDecoder<'b> {
         self.first_marker_found = false;
         self.buffered = 0;
         self.last_seq_num = 0;
+        self.dec_count = 0;
     }
 
     pub fn decode(&mut self, packet: &rtp::Packet<&[u8]>) -> Result<Option<ImageInfo>, Error> {
@@ -102,7 +105,7 @@ impl<'b> JPEGDecoder<'b> {
 
             if packet.sequence_number() != self.last_seq_num.wrapping_add(1) {
                 warn!(
-                    "Discontiguous sequence number {}, expected {}",
+                    "Discontiguous sequence number {}, expected {}, resetting",
                     packet.sequence_number(),
                     self.last_seq_num.wrapping_add(1)
                 );
@@ -144,12 +147,17 @@ impl<'b> JPEGDecoder<'b> {
 
                 // Run it through the nanojpeg decoder
                 let info = self.dec.decode(&self.buffer[..buffer_size])?;
+                self.dec_count = self.dec_count.wrapping_add(1);
 
                 return Ok(Some(info));
             }
 
             Ok(None)
         }
+    }
+
+    pub fn decoded_count(&self) -> usize {
+        self.dec_count
     }
 
     fn generate_headers(&mut self, hdr: &Header<&[u8]>) -> Result<(), Error> {

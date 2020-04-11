@@ -1,10 +1,10 @@
 use crate::hal::bcm2711::genet::NUM_DMA_DESC;
 use crate::hal::eth::MAX_MTU_SIZE;
-use crate::hal::time::Instant;
-use core::convert::TryFrom;
+use crate::hal::time::{Duration, Instant};
 use core::str;
 use heapless::{consts::U512, String};
-use log::{debug, error, warn};
+use log::{debug, warn};
+use rtsp::header::CSeq;
 use rtsp::*;
 use smoltcp::iface::EthernetInterface;
 use smoltcp::socket::{SocketHandle, SocketSet, TcpSocket, TcpState, UdpSocket};
@@ -23,6 +23,11 @@ const TCP_TIMEOUT_DURATION: Option<smoltcp::time::Duration> =
     Some(smoltcp::time::Duration { millis: 5 * 1000 });
 const TCP_KEEP_ALIVE_INTERVAL: Option<smoltcp::time::Duration> =
     Some(smoltcp::time::Duration { millis: 2 * 1000 });
+
+const RTSP_KEEP_ALIVE_INTERVAL: Duration = Duration {
+    // Assumes the server responded with timeout=60s
+    millis: 40_000,
+};
 
 // 49152..=65535
 const EPHEMERAL_PORT: u16 = 49152;
@@ -54,6 +59,8 @@ pub struct Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
     rtsp_state: RtspState,
     rtsp_string: RtspString,
     session: Option<Session>,
+    cseq: CSeq,
+    last_keep_alive: Instant,
 }
 
 impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
@@ -77,6 +84,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
             rtsp_state: RtspState::RequestOptions,
             rtsp_string,
             session: None,
+            cseq: CSeq::default(),
+            last_keep_alive: Instant::from_millis(0),
         };
 
         debug!("UDP endpoint {}", eth.udp_endpoint);
@@ -87,7 +96,6 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
         Ok(eth)
     }
 
-    // TODO - check for packet here?
     pub fn recv_udp<F: FnOnce(&[u8])>(&mut self, f: F) -> Result<(), Error> {
         let mut socket = self.sockets.get::<UdpSocket>(self.udp_handle);
         if socket.can_recv() {
@@ -99,11 +107,57 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
         }
     }
 
-    // TODO - rate limit the TCP reconnect
-    // - figure out why the TCP connection is dropping
     pub fn poll(&mut self, time: Instant) {
         let mut reconnect = false;
         let mut tcp_state = TcpState::Closed;
+
+        if self.rtsp_state == RtspState::Streaming {
+            let mut tcp_socket = self.sockets.get::<TcpSocket>(self.tcp_handle);
+
+            // Send a GET_PARAMETER request to keep the TCP connection open
+            if (time - self.last_keep_alive) >= RTSP_KEEP_ALIVE_INTERVAL {
+                debug!("[{}] RTSP keep alive request", time);
+                self.last_keep_alive = time;
+
+                self.cseq.wrapping_increment();
+                let mut req = request_for_get_param(&self.cseq);
+                req.headers
+                    .push(self.session.as_ref().unwrap().clone().into())
+                    .unwrap();
+
+                self.rtsp_string.clear();
+                req.emit(&mut self.rtsp_string).expect("Request emit");
+                let req_size = self.rtsp_string.as_bytes().len();
+                let req_slice = self.rtsp_string.as_bytes();
+
+                tcp_socket
+                    .send(|buffer| {
+                        if req_size <= buffer.len() {
+                            debug!("Sending {} request {} bytes", req.method(), req_size);
+                            &mut buffer[..req_size].copy_from_slice(req_slice);
+                            (req_size, ())
+                        } else {
+                            warn!(
+                                "TCP tx buffer {} too small for {} request bytes",
+                                buffer.len(),
+                                req_size
+                            );
+                            (0, ())
+                        }
+                    })
+                    .expect("TCP can't send");
+            }
+
+            // Drain TCP recv buffers
+            if tcp_socket.may_recv() {
+                tcp_socket
+                    .recv(|buffer| {
+                        debug!("Drained {} bytes from TCP recv", buffer.len());
+                        (buffer.len(), ())
+                    })
+                    .ok();
+            }
+        }
 
         let t = smoltcp::time::Instant::from_millis(time.total_millis() as i64);
         match self.iface.poll(&mut self.sockets, t) {
@@ -121,35 +175,31 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                 };
 
                 if tcp_socket.is_active() && !self.tcp_was_connected {
-                    debug!("TCP connected, state {}", tcp_socket.state());
+                    debug!("[{}] TCP connected, state {}", time, tcp_socket.state());
                     self.tcp_was_connected = true
                 } else if (!tcp_socket.is_active() && self.tcp_was_connected) || remote_disconnected
                 {
-                    warn!("TCP disconnected");
+                    warn!("[{}] TCP disconnected", time);
                     self.tcp_was_connected = false;
                     if remote_disconnected {
                         tcp_socket.close();
                     }
                     tcp_socket.abort();
-                    self.rtsp_state = RtspState::RequestOptions;
                     reconnect = true;
-                    panic!("TODO - figure out the disconnection issue first");
+                    self.rtsp_state = RtspState::RequestOptions;
                 }
 
                 tcp_state = tcp_socket.state();
             }
             Err(e) => match e {
-                //Error::Exhausted => error!("Socket buffer exhausted"),
-                Error::Exhausted => panic!("Socket buffer exhausted"),
+                Error::Exhausted => warn!("Socket buffer exhausted"),
                 Error::Dropped => warn!("Packet dropped"),
                 _ => (),
             },
             _ => (),
         }
 
-        // TODO - need to manage the TCP connection
         // TODO - clean this up
-        // - do a teardown first to cleanup?
         if tcp_state == TcpState::Established {
             let mut tcp_socket = self.sockets.get::<TcpSocket>(self.tcp_handle);
 
@@ -190,6 +240,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                                 Method::Setup => self.rtsp_state = RtspState::RequestPlay,
                                 Method::Play => {
                                     self.rtsp_state = RtspState::Streaming;
+                                    self.last_keep_alive = time;
                                     debug!("Got PLAY response, should be streaming now");
                                 }
                                 _ => (),
@@ -198,7 +249,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                     }
                 }
                 RtspState::RequestOptions => {
-                    let req = request_for_options();
+                    self.cseq.wrapping_increment();
+                    let req = request_for_options(&self.cseq);
                     self.rtsp_string.clear();
                     req.emit(&mut self.rtsp_string).expect("Request emit");
                     let req_size = self.rtsp_string.as_bytes().len();
@@ -206,7 +258,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                     tcp_socket
                         .send(|buffer| {
-                            debug!("Sending OPTIONS request {} bytes", req_size);
+                            debug!("Sending {} request {} bytes", req.method(), req_size);
                             &mut buffer[..req_size].copy_from_slice(req_slice);
                             (req_size, ())
                         })
@@ -215,7 +267,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                     self.rtsp_state = RtspState::WaitForResponse(Method::Options);
                 }
                 RtspState::RequestDescribe => {
-                    let req = request_for_describe();
+                    self.cseq.wrapping_increment();
+                    let req = request_for_describe(&self.cseq);
                     self.rtsp_string.clear();
                     req.emit(&mut self.rtsp_string).expect("Request emit");
                     let req_size = self.rtsp_string.as_bytes().len();
@@ -223,7 +276,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                     tcp_socket
                         .send(|buffer| {
-                            debug!("Sending DESCRIBE request {} bytes", req_size);
+                            debug!("Sending {} request {} bytes", req.method(), req_size);
                             &mut buffer[..req_size].copy_from_slice(req_slice);
                             (req_size, ())
                         })
@@ -232,7 +285,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                     self.rtsp_state = RtspState::WaitForResponse(Method::Describe);
                 }
                 RtspState::RequestSetup => {
-                    let req = request_for_setup();
+                    self.cseq.wrapping_increment();
+                    let req = request_for_setup(&self.cseq);
                     self.rtsp_string.clear();
                     req.emit(&mut self.rtsp_string).expect("Request emit");
                     let req_size = self.rtsp_string.as_bytes().len();
@@ -240,7 +294,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                     tcp_socket
                         .send(|buffer| {
-                            debug!("Sending SETUP request {} bytes", req_size);
+                            debug!("Sending {} request {} bytes", req.method(), req_size);
                             &mut buffer[..req_size].copy_from_slice(req_slice);
                             (req_size, ())
                         })
@@ -249,7 +303,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
                     self.rtsp_state = RtspState::WaitForResponse(Method::Setup);
                 }
                 RtspState::RequestPlay => {
-                    let mut req = request_for_play();
+                    self.cseq.wrapping_increment();
+                    let mut req = request_for_play(&self.cseq);
                     req.headers
                         .push(self.session.as_ref().unwrap().clone().into())
                         .unwrap();
@@ -261,7 +316,7 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
 
                     tcp_socket
                         .send(|buffer| {
-                            debug!("Sending PLAY request {} bytes", req_size);
+                            debug!("Sending {} request {} bytes", req.method(), req_size);
                             &mut buffer[..req_size].copy_from_slice(req_slice);
                             (req_size, ())
                         })
@@ -298,7 +353,8 @@ impl<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> Net<'a, 'b, 'c, 'd, 'e, 'f, 'rx, 'tx> {
     }
 }
 
-fn request_for_options() -> Request {
+// TODO - clean these up, can build them from state/consts
+fn request_for_options(cseq: &CSeq) -> Request {
     Request {
         request_line: (
             Method::Options,
@@ -306,16 +362,11 @@ fn request_for_options() -> Request {
             Version::new(1, 0),
         )
             .into(),
-        headers: Headers(
-            [CSeq::try_from(1_u32).unwrap().into()]
-                .iter()
-                .cloned()
-                .collect(),
-        ),
+        headers: Headers([cseq.clone().into()].iter().cloned().collect()),
     }
 }
 
-fn request_for_describe() -> Request {
+fn request_for_describe(cseq: &CSeq) -> Request {
     Request {
         request_line: (
             Method::Describe,
@@ -324,18 +375,15 @@ fn request_for_describe() -> Request {
         )
             .into(),
         headers: Headers(
-            [
-                CSeq::try_from(2_u32).unwrap().into(),
-                ("Accept", "application/sdp").into(),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            [cseq.clone().into(), ("Accept", "application/sdp").into()]
+                .iter()
+                .cloned()
+                .collect(),
         ),
     }
 }
 
-fn request_for_setup() -> Request {
+fn request_for_setup(cseq: &CSeq) -> Request {
     Request {
         request_line: (
             Method::Setup,
@@ -345,7 +393,7 @@ fn request_for_setup() -> Request {
             .into(),
         headers: Headers(
             [
-                CSeq::try_from(3_u32).unwrap().into(),
+                cseq.clone().into(),
                 ("Transport", "RTP/AVP;unicast;client_port=49154-49155").into(),
             ]
             .iter()
@@ -355,7 +403,7 @@ fn request_for_setup() -> Request {
     }
 }
 
-fn request_for_play() -> Request {
+fn request_for_play(cseq: &CSeq) -> Request {
     Request {
         request_line: (
             Method::Play,
@@ -363,11 +411,19 @@ fn request_for_play() -> Request {
             Version::new(1, 0),
         )
             .into(),
-        headers: Headers(
-            [CSeq::try_from(4_u32).unwrap().into()]
-                .iter()
-                .cloned()
-                .collect(),
-        ),
+        headers: Headers([cseq.clone().into()].iter().cloned().collect()),
+    }
+}
+
+// Used to ping/keep-alive, no body
+fn request_for_get_param(cseq: &CSeq) -> Request {
+    Request {
+        request_line: (
+            Method::GetParameter,
+            Uri::from("rtsp://192.168.1.64:554/streaming/channels/2"),
+            Version::new(1, 0),
+        )
+            .into(),
+        headers: Headers([cseq.clone().into()].iter().cloned().collect()),
     }
 }

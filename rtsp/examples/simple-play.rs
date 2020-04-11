@@ -69,20 +69,23 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    println!("UDP listen on port 49154");
     // 49154-49155
-    let mut socket = UdpSocket::bind("0.0.0.0:49154")?;
-    let mut rx = [0 as u8; 512];
+    println!("UDP listen on port 49154");
+    let socket = UdpSocket::bind("0.0.0.0:49154")?;
+    let mut rx = vec![0; 1500];
+    let mut cnt = 0;
     loop {
         match socket.recv_from(&mut rx) {
             Ok((amt, src)) => {
                 println!("Rx UDP {} bytes from {}", amt, src);
-                //
             }
-            Err(_) => {
-                //
-                panic!("UDP ERR");
+            Err(e) => {
+                eprintln!("UDP Error {:?}", e);
             }
+        }
+        cnt += 1;
+        if cnt >= 1_000 {
+            break;
         }
     }
 

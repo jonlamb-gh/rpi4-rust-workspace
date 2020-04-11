@@ -3,7 +3,6 @@
 
 extern crate bcm2711_hal as hal;
 
-// TODO - hal prelude should deal with a lot of these
 use crate::hal::bcm2711::dma::{Enable, DMA};
 use crate::hal::bcm2711::gpio::GPIO;
 use crate::hal::bcm2711::mbox::MBOX;
@@ -13,23 +12,16 @@ use crate::hal::cache;
 use crate::hal::clocks::Clocks;
 use crate::hal::dma;
 use crate::hal::eth::{self, Eth};
-use crate::hal::gpio::{Alternate, Pin14, Pin15, AF5};
 use crate::hal::mailbox::*;
 use crate::hal::prelude::*;
 use crate::hal::serial::Serial;
 use crate::hal::time::Bps;
+use crate::local_heap::{HEAP, HEAP_MEM, HEAP_SIZE};
 use crate::net::Net;
 use crate::net::*;
+use crate::serial_logger::SerialLogger;
 use arr_macro::arr;
-use core::alloc::Layout;
-use core::cell::UnsafeCell;
-use core::fmt::Write;
-use core::ptr;
-use core::slice;
-use heapless::consts::U256;
-use heapless::LinearMap;
-use linked_list_allocator::Heap;
-use log::{debug, info, warn, LevelFilter, Metadata, Record};
+use log::{debug, error, info, LevelFilter};
 use rtp_jpeg_decoder::*;
 use smoltcp::iface::{EthernetInterfaceBuilder, NeighborCache, Routes};
 use smoltcp::socket::{
@@ -38,14 +30,9 @@ use smoltcp::socket::{
 use smoltcp::wire::{EthernetAddress, IpCidr, IpEndpoint, Ipv4Address};
 use smoltcp_phy::EthDevice;
 
+mod local_heap;
 mod net;
-
-// add config.txt memory split
-//
-// previously: 0x0010_0000
-// new       : 0x0100_0000
-//
-// TODO - inspect the binary and see how close things are
+mod serial_logger;
 
 const WIDTH: usize = 320;
 const HEIGHT: usize = 240;
@@ -59,61 +46,9 @@ const CLIENT_PORT: u16 = 554;
 const UDP_SERVER_IP: Ipv4Address = Ipv4Address(SRC_IP);
 const UDP_SERVER_PORT: u16 = 49154;
 
-const HEAP_SIZE: usize = 3 * 720 * 480 * 5;
-
 static GLOBAL_LOGGER: SerialLogger = SerialLogger::new();
-static mut MAP: LinearMap<usize, Layout, U256> = LinearMap(heapless::i::LinearMap::new());
-static mut HEAP_MEM: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-static mut HEAP: Heap = Heap::empty();
-static mut WMARK: usize = HEAP_SIZE;
 
-#[allow(non_camel_case_types)]
-mod ctypes {
-    pub type size_t = usize;
-    pub type c_int = i32;
-    pub type c_void = core::ffi::c_void;
-    pub type c_uchar = u8;
-}
-
-type LogInner = Serial<UART1, (Pin14<Alternate<AF5>>, Pin15<Alternate<AF5>>)>;
-
-struct SerialLogger {
-    serial: UnsafeCell<Option<LogInner>>,
-}
-
-impl SerialLogger {
-    pub const fn new() -> SerialLogger {
-        SerialLogger {
-            serial: UnsafeCell::new(None),
-        }
-    }
-
-    pub fn set_inner(&self, inner: LogInner) {
-        let serial = unsafe { &mut *self.serial.get() };
-        let _ = serial.replace(inner);
-    }
-}
-
-unsafe impl Sync for SerialLogger {}
-
-impl log::Log for SerialLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            let maybe_serial = unsafe { &mut *self.serial.get() };
-            if let Some(serial) = maybe_serial {
-                writeln!(serial, "[{}] {}", record.level(), record.args()).unwrap();
-            } else {
-                panic!("Logger was used before being given its inner type");
-            }
-        }
-    }
-
-    fn flush(&self) {}
-}
+raspi3_boot::entry!(kernel_entry);
 
 fn kernel_entry() -> ! {
     let mut mbox = Mailbox::new(MBOX::new());
@@ -129,9 +64,7 @@ fn kernel_entry() -> ! {
     GLOBAL_LOGGER.set_inner(serial);
     unsafe {
         log::set_logger_racy(&GLOBAL_LOGGER)
-            //.map(|()| log::set_max_level(LevelFilter::Trace))
-            //.map(|()| log::set_max_level(LevelFilter::Error))
-            .map(|()| log::set_max_level(LevelFilter::Warn))
+            .map(|()| log::set_max_level(LevelFilter::Info))
             .unwrap();
     }
 
@@ -140,7 +73,7 @@ fn kernel_entry() -> ! {
     let mut sys_counter = sys_timer_parts.sys_counter;
     let mut timer = sys_timer_parts.timer1;
 
-    info!("smoltcp IP example");
+    info!("RTSP IP camera viewer example");
 
     info!("{:#?}", clocks);
 
@@ -188,8 +121,6 @@ fn kernel_entry() -> ! {
     assert_eq!(fb.virt_width, WIDTH);
     assert_eq!(fb.virt_height, HEIGHT);
 
-    // TODO - feature for nanojpeg to produce RGB/BGR 32 bpp data so
-    // we can DMA it directly instead of copying the RGB24 into BGR32
     let vc_mem_size = fb.alloc_buffer_size();
     let vc_mem_words = vc_mem_size / 4;
     info!("bytes {} - words {}", vc_mem_size, vc_mem_words,);
@@ -360,27 +291,23 @@ fn kernel_entry() -> ! {
     timer.start(500.hz());
 
     loop {
-        // TODO
-        //block!(timer.wait()).unwrap();
         if timer.wait().is_ok() {
+            // TODO - track overflows
             let time = sys_counter.get_time();
             net.poll(time);
         }
 
         for _ in 0..UDP_NUM_PACKETS {
             net.recv_udp(|data| {
-                info!("UDP recvd {} bytes", data.len());
-
+                debug!("UDP recvd {} bytes", data.len());
                 match rtp::Packet::new_checked(data) {
-                    //Err(e) => warn!("rtp::Packet error {:?}", e),
-                    Err(e) => panic!("rtp::Packet error {:?}", e),
+                    Err(e) => error!("rtp::Packet error {:?}", e),
                     Ok(pkt) => match decoder.decode(&pkt) {
-                        Err(e) => warn!("JPEGDecoder error {:?}", e),
-                        //Err(e) => panic!("JPEGDecoder error {:?}", e),
+                        Err(e) => error!("JPEGDecoder error {:?}", e),
                         Ok(maybe_image) => match maybe_image {
-                            None => info!("Ok"),
+                            None => (),
                             Some(image_info) => {
-                                info!("{}", image_info);
+                                info!(" {} : {}", decoder.decoded_count(), image_info);
                                 assert_eq!(image_info.image.len() / 4, WIDTH * HEIGHT);
 
                                 dcb.set_src(image_info.image.as_ptr() as u32);
@@ -468,115 +395,3 @@ fn alloc_framebuffer(mbox: &mut Mailbox) -> AllocFramebufferRepr {
         panic!("Invalid response\n{:#?}", resp);
     }
 }
-
-#[no_mangle]
-pub unsafe extern "C" fn njAllocMem(size: ctypes::c_int) -> *mut ctypes::c_void {
-    // TODO
-    // https://github.com/ezrosent/allocators-rs/blob/master/malloc-bind/src/lib.rs#L618
-    // https://github.com/ezrosent/allocators-rs/blob/master/malloc-bind/src/lib.rs#L184
-
-    let size = size as usize;
-    if size == 0 {
-        return ptr::null_mut();
-    }
-
-    //debug!("malloc size {}", size);
-    let size = roundup(size, MIN_ALIGN);
-    //debug!(" -- aligned size {}", size);
-    let layout = layout_from_size_align(size as usize, MIN_ALIGN);
-    let ptr = HEAP
-        .allocate_first_fit(layout.clone())
-        .ok()
-        .map_or(0 as *mut u8, |allocation| allocation.as_ptr());
-    if !ptr.is_null() {
-        WMARK -= layout.size();
-        insert_layout(ptr, layout);
-        cache::clean_and_invalidate_data_cache_range(ptr as _, size);
-    } else {
-        panic!("Heap out of memory, WMARK = {}", WMARK);
-    }
-    //debug!(" -- WMARK {}", WMARK);
-    //debug!(" -- at {:?}", ptr);
-    ptr as *mut ctypes::c_void
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn njFreeMem(ptr: *mut ctypes::c_void) {
-    //debug!("free {:?}", ptr);
-    if ptr.is_null() {
-        return;
-    }
-    let layout = get_layout(ptr as *mut u8);
-    WMARK += layout.size();
-    //debug!(" ++ WMARK {}", WMARK);
-    delete_layout(ptr as *mut u8);
-    HEAP.deallocate(ptr::NonNull::new_unchecked(ptr as *mut u8), layout);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn njFillMem(
-    block: *mut ctypes::c_void,
-    byte: ctypes::c_uchar,
-    size: ctypes::c_int,
-) {
-    if size > 0 {
-        let slice = slice::from_raw_parts_mut(block as *mut u8, size as usize);
-        slice.iter_mut().for_each(|b| *b = byte);
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn njCopyMem(
-    dst: *mut ctypes::c_void,
-    src: *const ctypes::c_void,
-    size: ctypes::c_int,
-) {
-    if size > 0 {
-        let dst = slice::from_raw_parts_mut(dst as *mut u8, size as usize);
-        let src = slice::from_raw_parts(src as *mut u8, size as usize);
-        dst.copy_from_slice(src);
-    }
-}
-
-const MIN_ALIGN: ctypes::size_t = 8;
-//const MIN_ALIGN: ctypes::size_t = 16;
-
-#[inline(always)]
-fn roundup(n: ctypes::size_t, multiple: ctypes::size_t) -> ctypes::size_t {
-    if n == 0 {
-        return multiple;
-    }
-    let remainder = n % multiple;
-    if remainder == 0 {
-        n
-    } else {
-        n + multiple - remainder
-    }
-}
-
-#[inline(always)]
-unsafe fn layout_from_size_align(size: usize, align: usize) -> Layout {
-    // TODO - flatten this
-    if cfg!(debug_assertions) {
-        Layout::from_size_align(size as usize, align).unwrap()
-    } else {
-        Layout::from_size_align_unchecked(size as usize, align)
-    }
-}
-
-unsafe fn insert_layout(ptr: *mut u8, layout: Layout) {
-    //debug!("Insert layout {:?} : {:?}", ptr, layout);
-    let _ = MAP.insert(ptr as usize, layout).expect("TODO");
-}
-
-unsafe fn get_layout(ptr: *mut u8) -> Layout {
-    //debug!("Get layout {:?}", ptr);
-    MAP.get(&(ptr as usize)).expect("TODO").clone()
-}
-
-unsafe fn delete_layout(ptr: *mut u8) {
-    //debug!("Delete layout {:?}", ptr);
-    let _ = MAP.remove(&(ptr as usize)).expect("TODO");
-}
-
-raspi3_boot::entry!(kernel_entry);

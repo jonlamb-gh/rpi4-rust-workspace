@@ -2,7 +2,7 @@
 //!
 //! [RFC2326](https://tools.ietf.org/html/rfc2326#section-6)
 
-use crate::{Emit, Headers, Parse, RequestLine};
+use crate::{Emit, Headers, Method, Parse, RequestLine};
 use core::fmt;
 use nom::IResult;
 
@@ -12,6 +12,12 @@ pub struct Request {
     pub request_line: RequestLine,
     pub headers: Headers,
     // body, u8/str?
+}
+
+impl Request {
+    pub fn method(&self) -> Method {
+        self.request_line.method
+    }
 }
 
 impl fmt::Display for Request {

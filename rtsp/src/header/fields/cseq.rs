@@ -18,8 +18,14 @@ use nom::{
 /// The maximum size the CSeq can be.
 pub const MAX_CSEQ: u32 = 999_999_999;
 
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CSeq(u32);
+
+impl Default for CSeq {
+    fn default() -> Self {
+        CSeq(1)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
