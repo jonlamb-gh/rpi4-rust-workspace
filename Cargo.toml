@@ -20,9 +20,3 @@ members = [
     "examples/ipcam-viewer",
     "examples/mem2mem-dma",
 ]
-
-[profile.release]
-# TODO - is this still needed?
-# Prevents unaligned access, see:
-# https://github.com/rust-lang/rust/issues/66897
-opt-level = 1
