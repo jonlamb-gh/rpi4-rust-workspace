@@ -1,3 +1,5 @@
+use core::fmt;
+
 /// [RFC3984](https://tools.ietf.org/html/rfc3984#section-5.2)
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum NalUnitType {
@@ -39,6 +41,20 @@ impl Into<u8> for NalUnitType {
             NalUnitType::Pps => 8,
             NalUnitType::FuA => 28,
             NalUnitType::Unknown(v) => v,
+        }
+    }
+}
+
+impl fmt::Display for NalUnitType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let val: u8 = self.clone().into();
+        match *self {
+            NalUnitType::SingleNalUnit => write!(f, "NAL unit ({})", val),
+            NalUnitType::Sei => write!(f, "SEI ({})", val),
+            NalUnitType::Sps => write!(f, "SPS ({})", val),
+            NalUnitType::Pps => write!(f, "PPS ({})", val),
+            NalUnitType::FuA => write!(f, "FU-A ({})", val),
+            NalUnitType::Unknown(_v) => write!(f, "Unknown ({})", val),
         }
     }
 }

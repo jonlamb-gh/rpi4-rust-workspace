@@ -7,7 +7,8 @@
 //! * 8 (PPS)
 //! * 28 (FU-A fragmentation unit)
 
-use crate::NalUnitType;
+use crate::{Error, NalUnitType};
+use core::fmt;
 
 const SUPPORTED_UNIT_TYPES: [NalUnitType; 5] = [
     NalUnitType::SingleNalUnit,
@@ -16,13 +17,6 @@ const SUPPORTED_UNIT_TYPES: [NalUnitType; 5] = [
     NalUnitType::Pps,
     NalUnitType::FuA,
 ];
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Error {
-    Truncated,
-    Syntax,
-    NalUnitType(NalUnitType),
-}
 
 /// NAL unit header
 ///
@@ -112,5 +106,16 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Header<&'a T> {
     pub fn payload(&self) -> &'a [u8] {
         let data = self.buffer.as_ref();
         &data[field::PAYLOAD]
+    }
+}
+
+impl<T: AsRef<[u8]>> fmt::Display for Header<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "NAL Unit Header {{nal_ref_idc={}, nal_unit_type={}}}",
+            self.nal_ref_idc(),
+            self.nal_unit_type(),
+        )
     }
 }

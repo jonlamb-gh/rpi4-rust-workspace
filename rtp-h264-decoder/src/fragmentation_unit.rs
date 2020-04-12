@@ -1,7 +1,4 @@
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Error {
-    Truncated,
-}
+use crate::Error;
 
 /// NAL fragmentation unit
 ///

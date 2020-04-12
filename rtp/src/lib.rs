@@ -3,6 +3,7 @@
 #![no_std]
 
 use byteorder::{BigEndian, ByteOrder};
+use core::fmt;
 
 /// Minimum of 12 bytes
 pub const HEADER_SIZE: usize = 12;
@@ -148,6 +149,22 @@ impl<'a, T: AsRef<[u8]> + ?Sized> Packet<&'a T> {
         } else {
             &data[field::PAYLOAD]
         }
+    }
+}
+
+impl<T: AsRef<[u8]>> fmt::Display for Packet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "RTP Packet {{v={}, p={}, x={}, m={}, pt={}, sn={}, t={}}}",
+            self.version(),
+            self.contains_padding(),
+            self.contains_extension(),
+            self.contains_marker(),
+            self.payload_type(),
+            self.sequence_number(),
+            self.timestamp(),
+        )
     }
 }
 
