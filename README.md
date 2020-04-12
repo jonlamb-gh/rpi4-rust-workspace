@@ -9,9 +9,9 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [bcm2711](bcm2711/) : Device crate, registers defined via [bounded-registers](https://github.com/auxoncorp/bounded-registers)
 * [bcm2711-hal](bcm2711-hal/) : [embedded-hal](https://github.com/rust-embedded/embedded-hal) trait impls
 * [display](display/) : Double buffered DMA graphics/display library
-* [rtsp](rtsp/) : WIP RTSP library
-* [rtp](rtp/) : WIP RTP library
-* [rtp-jpeg-decoder](rtp-jpeg-decoder/) : WIP RTP JPEG decoder library
+* [rtsp](rtsp/) : RTSP library
+* [rtp](rtp/) : RTP library
+* [rtp-jpeg-decoder](rtp-jpeg-decoder/) : RTP JPEG decoder library
 * [raspi3_boot](raspi3_boot/) : Mostly copied from [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials)
 
 ## Examples
@@ -23,7 +23,7 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [mbox](examples/mbox/src/main.rs) : Reads various things using the [Mailbox property interface](https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface)
 * [mem2mem-dma](examples/mem2mem-dma/src/main.rs) : Simple DMA transfer example
 * [uart1](examples/uart1/src/main.rs) : UART1 example
-* [ipcam-viewer](examples/ipcam-viewer/src/main.rs) : WIP ip-camera RTSP client and image display
+* [ipcam-viewer](examples/ipcam-viewer/src/main.rs) : ip-camera RTSP client and image display
 
 ## Building
 
