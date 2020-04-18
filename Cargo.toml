@@ -9,6 +9,7 @@ members = [
     "rtp",
     "rtp-jpeg-decoder",
     "rtp-h264-decoder",
+    "uplot",
     "raspi3_boot",
     "examples/uart0",
     "examples/uart1",

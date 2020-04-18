@@ -12,6 +12,7 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [rtsp](rtsp/) : RTSP library
 * [rtp](rtp/) : RTP library
 * [rtp-jpeg-decoder](rtp-jpeg-decoder/) : RTP JPEG decoder library
+* [uplot](uplot/) : Small plotting library using `embedded-graphics` primitives
 * [raspi3_boot](raspi3_boot/) : Mostly copied from [rust-raspi3-OS-tutorials](https://github.com/rust-embedded/rust-raspi3-OS-tutorials)
 
 ## Examples
@@ -26,6 +27,8 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [ipcam-viewer](examples/ipcam-viewer/src/main.rs) : ip-camera RTSP client and image display
 
 ## Building
+
+`rustc 1.44.0-nightly (94d346360 2020-04-09)`
 
 ```rust
 cargo xbuild

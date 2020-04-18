@@ -1,0 +1,16 @@
+[package]
+name = "uplot"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+generic-array = "0.14"
+embedded-graphics = "0.6"
+
+# cargo build -Z features=dev_dep
+# cargo-features = ["dev_dep"]
+# https://github.com/rust-lang/cargo/issues/7916
+[dev-dependencies]
+rand = "0.7"
+embedded-graphics-simulator = "0.2"
