@@ -22,7 +22,7 @@ use uplot::{Config, Plot, Storage};
 //};
 
 fn main() -> Result<(), std::convert::Infallible> {
-    let mut display: SimulatorDisplay<Rgb888> = SimulatorDisplay::new(Size::new(800, 480));
+    let mut display: SimulatorDisplay<Rgb888> = SimulatorDisplay::new(Size::new(1600, 960));
 
     // Create styles used by the drawing operations.
     //    let thin_stroke = PrimitiveStyle::with_stroke(RgbColor::BLUE, 1);
@@ -72,8 +72,6 @@ fn main() -> Result<(), std::convert::Infallible> {
 
     let mut win = Window::new("Plot", &output_settings);
 
-    let storage = Storage::<i8, U256>::new();
-
     let config = Config {
         top_left: Point::new(0, 0),
         bottom_right: Point::new(800, 480),
@@ -81,19 +79,49 @@ fn main() -> Result<(), std::convert::Infallible> {
         y_max: std::i8::MAX.into(),
         ..Default::default()
     };
+    let mut plot_tl = Plot::new(config, Storage::<i8, U256>::new());
 
-    let mut plot = Plot::new(config, storage);
+    let config = Config {
+        top_left: Point::new(800, 0),
+        bottom_right: Point::new(1600, 480),
+        y_min: std::i8::MIN.into(),
+        y_max: std::i8::MAX.into(),
+        ..Default::default()
+    };
+    let mut plot_tr = Plot::new(config, Storage::<i8, U256>::new());
+
+    let config = Config {
+        top_left: Point::new(0, 480),
+        bottom_right: Point::new(800, 960),
+        y_min: std::i8::MIN.into(),
+        y_max: std::i8::MAX.into(),
+        ..Default::default()
+    };
+    let mut plot_bl = Plot::new(config, Storage::<i8, U256>::new());
+
+    let config = Config {
+        top_left: Point::new(800, 480),
+        bottom_right: Point::new(1600, 960),
+        y_min: std::i8::MIN.into(),
+        y_max: std::i8::MAX.into(),
+        ..Default::default()
+    };
+    let mut plot_br = Plot::new(config, Storage::<i8, U256>::new());
 
     let mut rng = thread_rng();
-
     let mut m: i8 = 0;
-
     'running: loop {
         let delta: i8 = rng.gen_range(-3, 4);
         m = m.wrapping_add(delta);
-        plot.add_measurement(m);
+        plot_tl.add_measurement(m);
+        plot_tr.add_measurement(m);
+        plot_bl.add_measurement(m);
+        plot_br.add_measurement(m);
 
-        plot.build().draw(&mut display)?;
+        plot_tl.build().draw(&mut display)?;
+        plot_tr.build().draw(&mut display)?;
+        plot_bl.build().draw(&mut display)?;
+        plot_br.build().draw(&mut display)?;
 
         win.update(&display);
 
