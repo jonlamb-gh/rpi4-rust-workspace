@@ -1,3 +1,8 @@
+//! Plot measurement storage
+//!
+//! Some things take from:
+//! https://github.com/japaric/heapless/pull/136/files
+
 use generic_array::{ArrayLength, GenericArray};
 
 #[derive(Debug, Clone)]
@@ -46,6 +51,11 @@ where
         if self.len < N::USIZE {
             self.len += 1;
         }
+    }
+
+    // TODO - option for len == 0...
+    pub fn recent(&self) -> &T {
+        &self.data[(self.write_at + self.len() - 1) % self.len()]
     }
 
     /// Element order is unspecified
@@ -128,6 +138,7 @@ mod tests {
         }
         assert_eq!(s.len(), U4::USIZE);
         assert_eq!(s.as_slice(), [124_i8, 125_i8, 126_i8, 127_i8]);
+        assert_eq!(*s.recent(), 127_i8);
     }
 
     #[test]
@@ -139,6 +150,7 @@ mod tests {
         assert_eq!(s.as_slice(), &[5, 6, 3, 4]);
         let a = s.into_iter().collect::<GenericArray<i8, U4>>();
         assert_eq!(&a[..], &[3, 4, 5, 6]);
+        assert_eq!(*s.recent(), 6_i8)
     }
 
     #[test]
@@ -150,5 +162,6 @@ mod tests {
         assert_eq!(s.as_slice(), &[1, 2]);
         let a = s.into_iter().collect::<GenericArray<i8, U2>>();
         assert_eq!(&a[..], &[1, 2]);
+        assert_eq!(*s.recent(), 2_i8)
     }
 }

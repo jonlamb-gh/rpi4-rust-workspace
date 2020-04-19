@@ -1,6 +1,7 @@
 #![no_std]
 
 // TODO
+// - rename to/from stuff to window/world coordinates
 // - proper scale/offset/transform function
 // - x axis units/data
 // - horiz/vert grid lines
@@ -15,10 +16,13 @@ use crate::internal::InternalConfig;
 pub use crate::label_storage::LabelStorage;
 pub use crate::storage::Storage;
 pub use crate::string::{PlotString, PlotStringCapacity};
+use core::fmt::Write;
 use embedded_graphics::{
     fonts::Text,
     pixelcolor::{Rgb888, RgbColor},
     prelude::*,
+    primitives::Line,
+    style::PrimitiveStyle,
 };
 use generic_array::ArrayLength;
 
@@ -35,6 +39,7 @@ where
 {
     config: InternalConfig<'cfg>,
     storage: Storage<T, N>,
+    recent: i32,
 }
 
 impl<'cfg, T, N> Plot<'cfg, T, N>
@@ -46,6 +51,7 @@ where
         Plot {
             config: InternalConfig::new(config, label_storage, storage.capacity() as i32),
             storage,
+            recent: 0,
         }
     }
 }
@@ -57,15 +63,31 @@ where
 {
     pub fn add_measurement(&mut self, t: T) {
         self.storage.write(t);
+        self.recent = Into::<i32>::into(*self.storage.recent());
+        self.config.label_storage.value_label.clear();
+        write!(
+            &mut self.config.label_storage.value_label,
+            "{}",
+            self.recent
+        )
+        .ok();
     }
 
     pub fn build(&'cfg self) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
+        let label_line_iter = Self::label_line(&self.config, self.recent);
+        let label_text_iter = Self::label_text(
+            &self.config,
+            self.recent,
+            &self.config.label_storage.value_label,
+        );
         let background = self.config.background.into_styled(self.config.bg_style);
         background
             .into_iter()
             .chain(Self::grid(&self.config))
             .chain(Self::axis_labels(&self.config))
             .chain(Self::labels(&self.config))
+            .chain(label_line_iter.into_iter().flat_map(|iter| iter))
+            .chain(label_text_iter.into_iter().flat_map(|iter| iter))
             .chain(self.storage.into_iter().enumerate().map(move |(idx, t)| {
                 let x = scale(idx as i32, self.config.x_from_range, self.config.x_to_range);
                 let y = scale(
@@ -103,12 +125,45 @@ where
     }
 
     fn labels(cfg: &'cfg InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
-        cfg.label_storage.iter().flat_map(move |label| {
+        cfg.label_storage.labels.iter().flat_map(move |label| {
             let x = label.x_to;
             let y = scale(label.y_from, cfg.y_from_range, cfg.y_to_range);
             let text = Text::new(&label.string, Point::new(x, y));
             text.into_styled(cfg.label_text_style).into_iter()
         })
+    }
+
+    fn label_line(
+        cfg: &InternalConfig<'cfg>,
+        recent: i32,
+    ) -> Option<impl Iterator<Item = Pixel<Rgb888>>> {
+        if let Some(c) = &cfg.cfg.label_line_color {
+            let x0 = cfg.x_to_range.0;
+            let x1 = x0 + cfg.cfg.label_line_len;
+            let y = scale(recent, cfg.y_from_range, cfg.y_to_range);
+            Some(
+                Line::new(Point::new(x0, y), Point::new(x1, y))
+                    .into_styled(PrimitiveStyle::with_stroke(*c, 1))
+                    .into_iter(),
+            )
+        } else {
+            None
+        }
+    }
+
+    fn label_text<'a>(
+        cfg: &InternalConfig<'cfg>,
+        recent: i32,
+        string: &'a str,
+    ) -> Option<impl Iterator<Item = Pixel<Rgb888>> + 'a> {
+        if let Some(_c) = &cfg.cfg.label_line_color {
+            let x = cfg.x_to_range.0 + cfg.cfg.label_line_len + i32::from(cfg.cfg.border_stroke);
+            let y = scale(recent, cfg.y_from_range, cfg.y_to_range);
+            let text = Text::new(&string, Point::new(x, y));
+            Some(text.into_styled(cfg.label_text_style).into_iter())
+        } else {
+            None
+        }
     }
 }
 

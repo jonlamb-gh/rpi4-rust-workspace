@@ -19,7 +19,8 @@ pub struct Config<'cfg> {
     pub axis_label_bg_color: Rgb888,
     pub label_color: Rgb888,
     pub label_bg_color: Rgb888,
-    // label_line_color: Option<Rgb888>
+    pub label_line_color: Option<Rgb888>,
+    pub label_line_len: i32,
     /// If zero, no Y axis labels, same input units as y_min/y_max
     pub label_y_ticks: u16,
 }
@@ -41,6 +42,8 @@ impl<'cfg> Default for Config<'cfg> {
             axis_label_bg_color: Rgb888::BLACK,
             label_color: Rgb888::WHITE,
             label_bg_color: Rgb888::BLACK,
+            label_line_color: Some(Rgb888::RED),
+            label_line_len: 32,
             label_y_ticks: 20,
         }
     }

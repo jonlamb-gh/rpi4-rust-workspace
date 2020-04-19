@@ -9,4 +9,14 @@ pub struct Label {
     pub(crate) y_from: i32,
 }
 
-pub type LabelStorage = Vec<Label, LabelStorageCapacity>;
+#[derive(Debug, Clone, Default)]
+pub struct LabelStorage {
+    pub(crate) labels: Vec<Label, LabelStorageCapacity>,
+    pub(crate) value_label: PlotString,
+}
+
+impl LabelStorage {
+    pub fn new() -> Self {
+        LabelStorage::default()
+    }
+}

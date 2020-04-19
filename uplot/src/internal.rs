@@ -132,7 +132,7 @@ impl<'cfg> InternalConfig<'cfg> {
     // TODO
     // - error handling
     pub fn generate_labels(&mut self) {
-        self.label_storage.clear();
+        self.label_storage.labels.clear();
 
         let y_from_offset = i32::from(self.cfg.label_y_ticks);
 
@@ -153,7 +153,7 @@ impl<'cfg> InternalConfig<'cfg> {
                 ..Default::default()
             };
             write!(&mut label.string, "{}", label.y_from).ok();
-            self.label_storage.push(label).ok();
+            self.label_storage.labels.push(label).ok();
 
             if y_from_origin != self.y_from_range.0 {
                 let mut label = Label {
@@ -162,7 +162,7 @@ impl<'cfg> InternalConfig<'cfg> {
                     ..Default::default()
                 };
                 write!(&mut label.string, "{}", label.y_from).ok();
-                self.label_storage.push(label).ok();
+                self.label_storage.labels.push(label).ok();
             }
         }
     }
