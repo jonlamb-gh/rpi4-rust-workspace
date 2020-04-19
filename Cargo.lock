@@ -1052,6 +1052,7 @@ dependencies = [
  "embedded-graphics 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-graphics-simulator 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "generic-array 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "heapless 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

@@ -12,8 +12,11 @@
 
 pub use crate::config::Config;
 use crate::internal::InternalConfig;
+pub use crate::label_storage::LabelStorage;
 pub use crate::storage::Storage;
+pub use crate::string::{PlotString, PlotStringCapacity};
 use embedded_graphics::{
+    fonts::Text,
     pixelcolor::{Rgb888, RgbColor},
     prelude::*,
 };
@@ -21,7 +24,9 @@ use generic_array::ArrayLength;
 
 mod config;
 mod internal;
+mod label_storage;
 mod storage;
+mod string;
 
 pub struct Plot<'cfg, T, N>
 where
@@ -37,9 +42,9 @@ where
     N: ArrayLength<T>,
     T: Copy + Into<i32>,
 {
-    pub fn new(config: Config<'cfg>, storage: Storage<T, N>) -> Self {
+    pub fn new(config: Config<'cfg>, label_storage: LabelStorage, storage: Storage<T, N>) -> Self {
         Plot {
-            config: InternalConfig::new(config, storage.capacity() as i32),
+            config: InternalConfig::new(config, label_storage, storage.capacity() as i32),
             storage,
         }
     }
@@ -56,15 +61,10 @@ where
 
     pub fn build(&'cfg self) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
         let background = self.config.background.into_styled(self.config.bg_style);
-
-        let grid_horiz_origin_line = self
-            .config
-            .grid_horiz_origin_line
-            .into_styled(self.config.grid_line_style);
-
         background
             .into_iter()
-            .chain(&grid_horiz_origin_line)
+            .chain(Self::grid(&self.config))
+            .chain(Self::axis_labels(&self.config))
             .chain(Self::labels(&self.config))
             .chain(self.storage.into_iter().enumerate().map(move |(idx, t)| {
                 let x = scale(idx as i32, self.config.x_from_range, self.config.x_to_range);
@@ -77,10 +77,38 @@ where
             }))
     }
 
-    fn labels(cfg: &InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
+    fn grid(cfg: &InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> {
+        // TODO - only need the origin line if T is signed, uses the horiz outline
+        let grid_horiz_origin_line = cfg
+            .grid_horiz_origin_line
+            .into_styled(cfg.grid_line_style)
+            .into_iter();
+        let grid_horiz_out_line = cfg
+            .grid_horiz_out_line
+            .into_styled(cfg.grid_line_style)
+            .into_iter();
+        let grid_vert_out_line = cfg
+            .grid_vert_out_line
+            .into_styled(cfg.grid_line_style)
+            .into_iter();
+        grid_horiz_origin_line
+            .chain(grid_horiz_out_line)
+            .chain(grid_vert_out_line)
+    }
+
+    fn axis_labels(cfg: &InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
         let x_axis = cfg.x_axis_text.into_styled(cfg.axis_text_style).into_iter();
         let y_axis = cfg.y_axis_text.into_styled(cfg.axis_text_style).into_iter();
         x_axis.chain(y_axis)
+    }
+
+    fn labels(cfg: &'cfg InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
+        cfg.label_storage.iter().flat_map(move |label| {
+            let x = label.x_to;
+            let y = scale(label.y_from, cfg.y_from_range, cfg.y_to_range);
+            let text = Text::new(&label.string, Point::new(x, y));
+            text.into_styled(cfg.label_text_style).into_iter()
+        })
     }
 }
 
@@ -102,7 +130,6 @@ mod tests {
 
     #[test]
     fn basic_usage() {
-        let storage = Storage::<i8, U12>::new();
         let config = Config {
             top_left: Point::new(0, 0),
             bottom_right: Point::new(800, 480),
@@ -110,7 +137,7 @@ mod tests {
             y_max: core::i8::MAX.into(),
             ..Default::default()
         };
-        let mut plot = Plot::new(config, storage);
+        let mut plot = Plot::new(config, LabelStorage::new(), Storage::<i8, U12>::new());
         for t in &[1, 2, 3, 4, 5] {
             plot.add_measurement(*t);
         }

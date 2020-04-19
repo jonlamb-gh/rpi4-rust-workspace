@@ -11,7 +11,7 @@ use generic_array::typenum::U256;
 use rand::{thread_rng, Rng};
 use std::thread;
 use std::time::Duration;
-use uplot::{Config, Plot, Storage};
+use uplot::{Config, LabelStorage, Plot, Storage};
 
 //use embedded_graphics::{
 //    fonts::{Font6x8, Text},
@@ -79,7 +79,7 @@ fn main() -> Result<(), std::convert::Infallible> {
         y_max: std::i8::MAX.into(),
         ..Default::default()
     };
-    let mut plot_tl = Plot::new(config, Storage::<i8, U256>::new());
+    let mut plot_tl = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
         top_left: Point::new(800, 0),
@@ -88,7 +88,7 @@ fn main() -> Result<(), std::convert::Infallible> {
         y_max: std::i8::MAX.into(),
         ..Default::default()
     };
-    let mut plot_tr = Plot::new(config, Storage::<i8, U256>::new());
+    let mut plot_tr = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
         top_left: Point::new(0, 480),
@@ -97,7 +97,7 @@ fn main() -> Result<(), std::convert::Infallible> {
         y_max: std::i8::MAX.into(),
         ..Default::default()
     };
-    let mut plot_bl = Plot::new(config, Storage::<i8, U256>::new());
+    let mut plot_bl = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
         top_left: Point::new(800, 480),
@@ -106,7 +106,7 @@ fn main() -> Result<(), std::convert::Infallible> {
         y_max: std::i8::MAX.into(),
         ..Default::default()
     };
-    let mut plot_br = Plot::new(config, Storage::<i8, U256>::new());
+    let mut plot_br = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let mut rng = thread_rng();
     let mut m: i8 = 0;

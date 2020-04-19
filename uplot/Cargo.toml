@@ -5,6 +5,7 @@ authors = ["Jon Lamb"]
 edition = "2018"
 
 [dependencies]
+heapless = "0.5"
 generic-array = "0.14"
 embedded-graphics = "0.6"
 
