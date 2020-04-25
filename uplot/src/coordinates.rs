@@ -88,20 +88,11 @@ impl<F: CoordinateFrame> From<(Position<F>, Position<F>)> for Point2D<F> {
     }
 }
 
-// TODO - shouldn't need these...
-//impl<F: CoordinateFrame> From<(Position<frame::Window>,
-// Position<frame::World>)> for Point2D<F> {    fn from(p:
-// (Position<frame::Window>, Position<frame::World>)) -> Point2D<F> {
-//        Point2D::new(Point::new(p.0.p, p.1.p))
-//    }
-//}
-//
-//impl<F: CoordinateFrame> From<(Position<frame::World>,
-// Position<frame::Window>)> for Point2D<F> {    fn from(p:
-// (Position<frame::World>, Position<frame::Window>)) -> Point2D<F> {
-//        Point2D::new(Point::new(p.0.p, p.1.p))
-//    }
-//}
+impl<F: CoordinateFrame> From<(i32, i32)> for Point2D<F> {
+    fn from(p: (i32, i32)) -> Point2D<F> {
+        Point2D::new(Point::new(p.0, p.1))
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
 pub struct Range1D<F: CoordinateFrame> {

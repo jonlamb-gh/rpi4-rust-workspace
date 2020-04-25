@@ -40,25 +40,31 @@ impl<'cfg> InternalConfig<'cfg> {
         let char_width = char_size.width as i32;
         let char_height = char_size.height as i32;
 
-        let text_offset = cmp::max(1, i32::from(cfg.border_stroke) / 2);
+        let text_offset = cmp::max(1, i32::from(cfg.style.border_stroke) / 2);
 
-        let x_min = cfg.top_left.x + i32::from(cfg.border_stroke) + char_width + text_offset;
-        let x_max = cfg.bottom_right.x - i32::from(cfg.border_stroke);
+        let x_min =
+            cfg.layout.top_left.p.x + i32::from(cfg.style.border_stroke) + char_width + text_offset;
+        let x_max = cfg.layout.bottom_right.p.x - i32::from(cfg.style.border_stroke);
 
-        let y_min = cfg.top_left.y + i32::from(cfg.border_stroke);
-        let y_max = cfg.bottom_right.y - char_height - i32::from(cfg.border_stroke) - text_offset;
+        let y_min = cfg.layout.top_left.p.y + i32::from(cfg.style.border_stroke);
+        let y_max = cfg.layout.bottom_right.p.y
+            - char_height
+            - i32::from(cfg.style.border_stroke)
+            - text_offset;
 
-        let center = Point2D::new(cfg.top_left + (cfg.bottom_right - cfg.top_left) / 2);
+        let center = Point2D::new(
+            cfg.layout.top_left.p + (cfg.layout.bottom_right.p - cfg.layout.top_left.p) / 2,
+        );
 
         // TODO - move to config
         let label_font = Font6x6;
         let label_tick_x = Position::new(x_min + text_offset);
         let label_text_style = TextStyleBuilder::new(label_font)
-            .text_color(cfg.label_color)
-            .background_color(cfg.label_bg_color)
+            .text_color(cfg.label.color)
+            .background_color(cfg.label.bg_color)
             .build();
         let label_text_pos = Point::new(
-            x_min + cfg.label_line_len + i32::from(cfg.border_stroke),
+            x_min + cfg.label.label_line_len + i32::from(cfg.style.border_stroke),
             -(Font6x6::CHARACTER_SIZE.height as i32),
         )
         .into();
@@ -66,17 +72,17 @@ impl<'cfg> InternalConfig<'cfg> {
         let x_from = (0, x_in_max).into();
         let x_to = (x_min, x_max).into();
 
-        let y_from = (cfg.y_min, cfg.y_max).into();
+        let y_from = (cfg.layout.y_min.p, cfg.layout.y_max.p).into();
         let y_to = (y_max, y_min).into();
 
         let bg_style = PrimitiveStyleBuilder::new()
-            .stroke_color(cfg.border_stroke_color)
-            .stroke_width(cfg.border_stroke.into())
-            .fill_color(cfg.bg_color)
+            .stroke_color(cfg.style.border_stroke_color)
+            .stroke_width(cfg.style.border_stroke.into())
+            .fill_color(cfg.style.bg_color)
             .build();
-        let background = Rectangle::new(cfg.top_left, cfg.bottom_right);
+        let background = Rectangle::new(cfg.layout.top_left.p, cfg.layout.bottom_right.p);
 
-        let grid_line_style = PrimitiveStyle::with_stroke(cfg.grid_color, 1);
+        let grid_line_style = PrimitiveStyle::with_stroke(cfg.style.grid_color, 1);
 
         let grid_horiz_origin_line =
             Line::new(Point::new(x_min, center.p.y), Point::new(x_max, center.p.y));
@@ -86,22 +92,25 @@ impl<'cfg> InternalConfig<'cfg> {
         let grid_vert_out_line = Line::new(Point::new(x_min, y_min), Point::new(x_min, y_max));
 
         let axis_text_style = TextStyleBuilder::new(font)
-            .text_color(cfg.axis_label_color)
-            .background_color(cfg.axis_label_bg_color)
+            .text_color(cfg.style.axis_label_color)
+            .background_color(cfg.style.axis_label_bg_color)
             .build();
 
         let x_axis_text = Text::new(
-            &cfg.x_axis_lable,
+            &cfg.label.x_axis_label,
             Point::new(
                 center.p.x,
-                cfg.bottom_right.y - char_height - i32::from(cfg.border_stroke) - text_offset,
+                cfg.layout.bottom_right.p.y
+                    - char_height
+                    - i32::from(cfg.style.border_stroke)
+                    - text_offset,
             ),
         );
 
         let y_axis_text = Text::new(
-            &cfg.y_axis_lable,
+            &cfg.label.y_axis_label,
             Point::new(
-                cfg.top_left.x + i32::from(cfg.border_stroke) + text_offset,
+                cfg.layout.top_left.p.x + i32::from(cfg.style.border_stroke) + text_offset,
                 center.p.y - (char_height / 2),
             ),
         );
@@ -128,19 +137,17 @@ impl<'cfg> InternalConfig<'cfg> {
             label_storage,
         };
 
-        if icfg.cfg.label_y_ticks != 0 {
+        if icfg.cfg.label.y_ticks != 0 {
             icfg.generate_labels();
         }
 
         icfg
     }
 
-    // TODO
-    // - error handling
     pub fn generate_labels(&mut self) {
         self.label_storage.labels.clear();
 
-        let y_from_offset = i32::from(self.cfg.label_y_ticks);
+        let y_from_offset = i32::from(self.cfg.label.y_ticks);
 
         let y_from_origin = if self.y_from.r.0 < 0 {
             // TODO
@@ -152,7 +159,9 @@ impl<'cfg> InternalConfig<'cfg> {
         // Skip origin marker
         let y_from_start = y_from_origin + y_from_offset;
 
-        for y_from in (y_from_start..self.cfg.y_max).step_by(usize::from(self.cfg.label_y_ticks)) {
+        for y_from in
+            (y_from_start..self.cfg.layout.y_max.p).step_by(usize::from(self.cfg.label.y_ticks))
+        {
             let y_pos: Position<frame::World> = y_from.into();
             let x_win_pos: Position<frame::Window> = self.label_tick_x.into();
             let y_win_pos: Position<frame::Window> = self.y_from.scale(y_pos, &self.y_to);

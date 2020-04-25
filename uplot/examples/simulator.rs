@@ -11,7 +11,7 @@ use generic_array::typenum::U256;
 use rand::{thread_rng, Rng};
 use std::thread;
 use std::time::Duration;
-use uplot::{Config, LabelStorage, Plot, Storage};
+use uplot::{Config, LabelStorage, LayoutConfig, Plot, Storage};
 
 fn main() -> Result<(), std::convert::Infallible> {
     let mut display: SimulatorDisplay<Rgb888> = SimulatorDisplay::new(Size::new(1600, 960));
@@ -21,37 +21,49 @@ fn main() -> Result<(), std::convert::Infallible> {
     let mut win = Window::new("Plot", &output_settings);
 
     let config = Config {
-        top_left: Point::new(0, 0),
-        bottom_right: Point::new(800, 480),
-        y_min: std::i8::MIN.into(),
-        y_max: std::i8::MAX.into(),
+        layout: LayoutConfig {
+            top_left: Point::new(0, 0).into(),
+            bottom_right: Point::new(800, 480).into(),
+            y_min: i32::from(std::i8::MIN).into(),
+            y_max: i32::from(std::i8::MAX).into(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut plot_tl = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
-        top_left: Point::new(800, 0),
-        bottom_right: Point::new(1600, 480),
-        y_min: std::i8::MIN.into(),
-        y_max: std::i8::MAX.into(),
+        layout: LayoutConfig {
+            top_left: Point::new(800, 0).into(),
+            bottom_right: Point::new(1600, 480).into(),
+            y_min: i32::from(std::i8::MIN).into(),
+            y_max: i32::from(std::i8::MAX).into(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut plot_tr = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
-        top_left: Point::new(0, 480),
-        bottom_right: Point::new(800, 960),
-        y_min: std::i8::MIN.into(),
-        y_max: std::i8::MAX.into(),
+        layout: LayoutConfig {
+            top_left: Point::new(0, 480).into(),
+            bottom_right: Point::new(800, 960).into(),
+            y_min: i32::from(std::i8::MIN).into(),
+            y_max: i32::from(std::i8::MAX).into(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut plot_bl = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());
 
     let config = Config {
-        top_left: Point::new(800, 480),
-        bottom_right: Point::new(1600, 960),
-        y_min: std::i8::MIN.into(),
-        y_max: std::i8::MAX.into(),
+        layout: LayoutConfig {
+            top_left: Point::new(800, 480).into(),
+            bottom_right: Point::new(1600, 960).into(),
+            y_min: i32::from(std::i8::MIN).into(),
+            y_max: i32::from(std::i8::MAX).into(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut plot_br = Plot::new(config, LabelStorage::new(), Storage::<i8, U256>::new());

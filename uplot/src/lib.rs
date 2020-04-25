@@ -1,17 +1,14 @@
 #![no_std]
 
 // TODO
-// - rename to/from stuff to window/world coordinates
-// - proper scale/offset/transform function
+// - error handling
+// - proper scale/offset/transform functions
 // - x axis units/data
 // - horiz/vert grid lines
 // - config origin, y == 0 or...
-// - scale and offset
-// - colors, fills, stroke
-// - style/etc points/lines
-// - labeling, fonts, text
+// - more style stuff, lines/etc
 
-pub use crate::config::Config;
+pub use crate::config::*;
 pub use crate::coordinates::{frame, Point2D, Position, Range1D};
 use crate::internal::InternalConfig;
 pub use crate::label_storage::{Label, LabelStorage};
@@ -93,7 +90,7 @@ where
                     .scale((idx as i32).into(), &self.config.x_to);
                 let value = Into::<i32>::into(t);
                 let y = self.config.y_from.scale(value.into(), &self.config.y_to);
-                Pixel(Point::new(x.p, y.p), self.config.cfg.points_color)
+                Pixel(Point::new(x.p, y.p), self.config.cfg.style.points_color)
             }))
     }
 
@@ -133,9 +130,9 @@ where
         cfg: &InternalConfig<'cfg>,
         recent: i32,
     ) -> Option<impl Iterator<Item = Pixel<Rgb888>>> {
-        if let Some(c) = &cfg.cfg.label_line_color {
+        if let Some(c) = &cfg.cfg.label.line_color {
             let x0 = cfg.x_to.r.0;
-            let x1 = x0 + cfg.cfg.label_line_len;
+            let x1 = x0 + cfg.cfg.label.label_line_len;
             let y = cfg.y_from.scale(recent.into(), &cfg.y_to);
             Some(
                 Line::new(Point::new(x0, y.p), Point::new(x1, y.p))
@@ -152,7 +149,7 @@ where
         recent: i32,
         string: &'a str,
     ) -> Option<impl Iterator<Item = Pixel<Rgb888>> + 'a> {
-        if cfg.cfg.label_line_color.is_some() {
+        if cfg.cfg.label.line_color.is_some() {
             let x: Position<frame::Window> = cfg.label_text_pos.p.x.into();
             let y = cfg.y_from.scale(recent.into(), &cfg.y_to);
             let text = Text::new(&string, Point::new(x.p, y.p));
@@ -170,13 +167,7 @@ mod tests {
 
     #[test]
     fn basic_usage() {
-        let config = Config {
-            top_left: Point::new(0, 0),
-            bottom_right: Point::new(800, 480),
-            y_min: core::i8::MIN.into(),
-            y_max: core::i8::MAX.into(),
-            ..Default::default()
-        };
+        let config = Config::default();
         let mut plot = Plot::new(config, LabelStorage::new(), Storage::<i8, U12>::new());
         for t in &[1, 2, 3, 4, 5] {
             plot.add_measurement(*t);
