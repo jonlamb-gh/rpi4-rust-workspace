@@ -19,11 +19,7 @@ pub use crate::storage::Storage;
 pub use crate::string::{PlotString, PlotStringCapacity};
 use core::fmt::Write;
 use embedded_graphics::{
-    fonts::Text,
-    pixelcolor::{Rgb888, RgbColor},
-    prelude::*,
-    primitives::Line,
-    style::PrimitiveStyle,
+    fonts::Text, pixelcolor::Rgb888, prelude::*, primitives::Line, style::PrimitiveStyle,
 };
 use generic_array::ArrayLength;
 
@@ -97,7 +93,7 @@ where
                     .scale((idx as i32).into(), &self.config.x_to);
                 let value = Into::<i32>::into(t);
                 let y = self.config.y_from.scale(value.into(), &self.config.y_to);
-                Pixel(Point::new(x.p, y.p), Rgb888::GREEN)
+                Pixel(Point::new(x.p, y.p), self.config.cfg.points_color)
             }))
     }
 

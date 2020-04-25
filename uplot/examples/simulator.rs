@@ -13,62 +13,10 @@ use std::thread;
 use std::time::Duration;
 use uplot::{Config, LabelStorage, Plot, Storage};
 
-//use embedded_graphics::{
-//    fonts::{Font6x8, Text},
-//    pixelcolor::{Rgb888, RgbColor},
-//    prelude::*,
-//    primitives::{Circle, Rectangle, Triangle},
-//    style::{PrimitiveStyle, TextStyle},
-//};
-
 fn main() -> Result<(), std::convert::Infallible> {
     let mut display: SimulatorDisplay<Rgb888> = SimulatorDisplay::new(Size::new(1600, 960));
 
-    // Create styles used by the drawing operations.
-    //    let thin_stroke = PrimitiveStyle::with_stroke(RgbColor::BLUE, 1);
-    //    let thick_stroke = PrimitiveStyle::with_stroke(RgbColor::BLUE, 3);
-    //    let fill = PrimitiveStyle::with_fill(RgbColor::BLUE);
-    //    let text_style = TextStyle::new(Font6x8, RgbColor::BLUE);
-
-    //let yoffset = 10;
-
-    // Draw a 3px wide outline around the display.
-    //Rectangle::new(
-    //    Point::zero(),
-    //    Point::new(display.size().width as _, display.size().height as _),
-    //)
-    //.into_styled(thick_stroke)
-    //.draw(&mut display)?;
-
-    // Draw a triangle.
-    //Triangle::new(
-    //    Point::new(16, 16 + yoffset),
-    //    Point::new(16 + 16, 16 + yoffset),
-    //    Point::new(16 + 8, yoffset),
-    //)
-    //.into_styled(thin_stroke)
-    //.draw(&mut display)?;
-
-    // Draw a filled square
-    //    Rectangle::new(Point::new(52, yoffset), Point::new(16, 16))
-    //        .into_styled(fill)
-    //        .draw(&mut display)?;
-
-    // Draw a circle with a 3px wide stroke.
-    //Circle::new(Point::new(88, yoffset), 17)
-    //    .into_styled(thick_stroke)
-    //    .draw(&mut display)?;
-
-    // Draw centered text.
-    //let text = "embedded-graphics";
-    //let width = text.len() as i32 * 6;
-    //Text::new(text, Point::new(64 - width / 2, 40))
-    //    .into_styled(text_style)
-    //    .draw(&mut display)?;
-
-    let output_settings = OutputSettingsBuilder::new()
-        //.theme(RgbColorTheme::BLUE)
-        .build();
+    let output_settings = OutputSettingsBuilder::new().build();
 
     let mut win = Window::new("Plot", &output_settings);
 

@@ -23,6 +23,7 @@ pub struct Config<'cfg> {
     pub label_line_len: i32,
     /// If zero, no Y axis labels, same input units as y_min/y_max
     pub label_y_ticks: u16,
+    pub points_color: Rgb888,
 }
 
 impl<'cfg> Default for Config<'cfg> {
@@ -45,6 +46,7 @@ impl<'cfg> Default for Config<'cfg> {
             label_line_color: Some(Rgb888::RED),
             label_line_len: 32,
             label_y_ticks: 20,
+            points_color: Rgb888::GREEN,
         }
     }
 }
