@@ -1,0 +1,18 @@
+[package]
+name = "temperature-plot"
+version = "0.1.0"
+authors = ["Jon Lamb"]
+edition = "2018"
+
+[dependencies]
+bcm2711-hal = { path = "../../bcm2711-hal" }
+display = { path = "../../display" }
+generic-array = "0.14"
+
+[dependencies.uplot]
+path = "../../uplot"
+
+[dependencies.raspi3_boot]
+path = "../../raspi3_boot"
+default-features = false
+features = ["panic-uart1"]

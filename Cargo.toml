@@ -20,4 +20,5 @@ members = [
     "examples/ip",
     "examples/ipcam-viewer",
     "examples/mem2mem-dma",
+    "examples/temperature-plot",
 ]

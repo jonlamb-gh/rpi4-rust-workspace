@@ -25,6 +25,7 @@ A lot of the things in here were inspired by [rust-raspi3-OS-tutorials](https://
 * [mem2mem-dma](examples/mem2mem-dma/src/main.rs) : Simple DMA transfer example
 * [uart1](examples/uart1/src/main.rs) : UART1 example
 * [ipcam-viewer](examples/ipcam-viewer/src/main.rs) : ip-camera RTSP client and image display
+* [temperature-plot](examples/temperature-plot/src/main.rs) : Plots the internal temperature
 
 ## Building
 
