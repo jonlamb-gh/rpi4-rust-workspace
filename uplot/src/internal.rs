@@ -1,5 +1,4 @@
-use crate::config::Config;
-use crate::label_storage::{Label, LabelStorage};
+use crate::{frame, Config, Label, LabelStorage, Point2D, Position, Range1D};
 use core::cmp;
 use core::fmt::Write;
 use embedded_graphics::{
@@ -13,11 +12,11 @@ use embedded_graphics::{
 #[derive(Debug)]
 pub(crate) struct InternalConfig<'cfg> {
     pub cfg: Config<'cfg>,
-    pub center: Point,
-    pub x_from_range: (i32, i32),
-    pub x_to_range: (i32, i32),
-    pub y_from_range: (i32, i32),
-    pub y_to_range: (i32, i32),
+    pub center: Point2D<frame::Window>,
+    pub x_from: Range1D<frame::World>,
+    pub x_to: Range1D<frame::Window>,
+    pub y_from: Range1D<frame::World>,
+    pub y_to: Range1D<frame::Window>,
     pub bg_style: PrimitiveStyle<Rgb888>,
     pub background: Rectangle,
     pub grid_line_style: PrimitiveStyle<Rgb888>,
@@ -28,7 +27,8 @@ pub(crate) struct InternalConfig<'cfg> {
     pub x_axis_text: Text<'cfg>,
     pub y_axis_text: Text<'cfg>,
     pub label_text_style: TextStyle<Rgb888, Font6x6>,
-    pub label_tick_x: i32,
+    pub label_text_pos: Point2D<frame::Window>,
+    pub label_tick_x: Position<frame::Window>,
     pub label_storage: LabelStorage,
 }
 
@@ -48,21 +48,26 @@ impl<'cfg> InternalConfig<'cfg> {
         let y_min = cfg.top_left.y + i32::from(cfg.border_stroke);
         let y_max = cfg.bottom_right.y - char_height - i32::from(cfg.border_stroke) - text_offset;
 
-        let center = cfg.top_left + (cfg.bottom_right - cfg.top_left) / 2;
+        let center = Point2D::new(cfg.top_left + (cfg.bottom_right - cfg.top_left) / 2);
 
         // TODO - move to config
         let label_font = Font6x6;
-        let label_tick_x = x_min + text_offset;
+        let label_tick_x = Position::new(x_min + text_offset);
         let label_text_style = TextStyleBuilder::new(label_font)
             .text_color(cfg.label_color)
             .background_color(cfg.label_bg_color)
             .build();
+        let label_text_pos = Point::new(
+            x_min + cfg.label_line_len + i32::from(cfg.border_stroke),
+            -(Font6x6::CHARACTER_SIZE.height as i32),
+        )
+        .into();
 
-        let x_from_range = (0, x_in_max);
-        let x_to_range = (x_min, x_max);
+        let x_from = (0, x_in_max).into();
+        let x_to = (x_min, x_max).into();
 
-        let y_from_range = (cfg.y_min, cfg.y_max);
-        let y_to_range = (y_max, y_min);
+        let y_from = (cfg.y_min, cfg.y_max).into();
+        let y_to = (y_max, y_min).into();
 
         let bg_style = PrimitiveStyleBuilder::new()
             .stroke_color(cfg.border_stroke_color)
@@ -74,7 +79,7 @@ impl<'cfg> InternalConfig<'cfg> {
         let grid_line_style = PrimitiveStyle::with_stroke(cfg.grid_color, 1);
 
         let grid_horiz_origin_line =
-            Line::new(Point::new(x_min, center.y), Point::new(x_max, center.y));
+            Line::new(Point::new(x_min, center.p.y), Point::new(x_max, center.p.y));
 
         let grid_horiz_out_line = Line::new(Point::new(x_min, y_max), Point::new(x_max, y_max));
 
@@ -88,7 +93,7 @@ impl<'cfg> InternalConfig<'cfg> {
         let x_axis_text = Text::new(
             &cfg.x_axis_lable,
             Point::new(
-                center.x,
+                center.p.x,
                 cfg.bottom_right.y - char_height - i32::from(cfg.border_stroke) - text_offset,
             ),
         );
@@ -97,17 +102,17 @@ impl<'cfg> InternalConfig<'cfg> {
             &cfg.y_axis_lable,
             Point::new(
                 cfg.top_left.x + i32::from(cfg.border_stroke) + text_offset,
-                center.y - (char_height / 2),
+                center.p.y - (char_height / 2),
             ),
         );
 
         let mut icfg = InternalConfig {
             cfg,
             center,
-            x_from_range,
-            x_to_range,
-            y_from_range,
-            y_to_range,
+            x_from,
+            x_to,
+            y_from,
+            y_to,
             bg_style,
             background,
             grid_line_style,
@@ -118,6 +123,7 @@ impl<'cfg> InternalConfig<'cfg> {
             x_axis_text,
             y_axis_text,
             label_text_style,
+            label_text_pos,
             label_tick_x,
             label_storage,
         };
@@ -136,32 +142,36 @@ impl<'cfg> InternalConfig<'cfg> {
 
         let y_from_offset = i32::from(self.cfg.label_y_ticks);
 
-        let y_from_origin = if self.y_from_range.0 < 0 {
+        let y_from_origin = if self.y_from.r.0 < 0 {
             // TODO
-            self.y_from_range.0 + self.y_from_range.1 + 1
+            self.y_from.r.0 + self.y_from.r.1 + 1
         } else {
-            self.y_from_range.0
+            self.y_from.r.0
         };
 
         // Skip origin marker
         let y_from_start = y_from_origin + y_from_offset;
 
         for y_from in (y_from_start..self.cfg.y_max).step_by(usize::from(self.cfg.label_y_ticks)) {
+            let y_pos: Position<frame::World> = y_from.into();
+            let x_win_pos: Position<frame::Window> = self.label_tick_x.into();
+            let y_win_pos: Position<frame::Window> = self.y_from.scale(y_pos, &self.y_to);
             let mut label = Label {
-                x_to: self.label_tick_x,
-                y_from,
+                pos: (x_win_pos, y_win_pos).into(),
                 ..Default::default()
             };
-            write!(&mut label.string, "{}", label.y_from).ok();
+
+            write!(&mut label.string, "{}", y_pos.p).ok();
             self.label_storage.labels.push(label).ok();
 
-            if y_from_origin != self.y_from_range.0 {
+            if y_from_origin != self.y_from.r.0 {
+                let y_pos: Position<frame::World> = (-y_from).into();
+                let y_win_pos: Position<frame::Window> = self.y_from.scale(y_pos, &self.y_to);
                 let mut label = Label {
-                    x_to: self.label_tick_x,
-                    y_from: -y_from,
+                    pos: (x_win_pos, y_win_pos).into(),
                     ..Default::default()
                 };
-                write!(&mut label.string, "{}", label.y_from).ok();
+                write!(&mut label.string, "{}", y_pos.p).ok();
                 self.label_storage.labels.push(label).ok();
             }
         }

@@ -12,8 +12,9 @@
 // - labeling, fonts, text
 
 pub use crate::config::Config;
+pub use crate::coordinates::{frame, Point2D, Position, Range1D};
 use crate::internal::InternalConfig;
-pub use crate::label_storage::LabelStorage;
+pub use crate::label_storage::{Label, LabelStorage};
 pub use crate::storage::Storage;
 pub use crate::string::{PlotString, PlotStringCapacity};
 use core::fmt::Write;
@@ -27,6 +28,7 @@ use embedded_graphics::{
 use generic_array::ArrayLength;
 
 mod config;
+mod coordinates;
 mod internal;
 mod label_storage;
 mod storage;
@@ -89,13 +91,13 @@ where
             .chain(label_line_iter.into_iter().flat_map(|iter| iter))
             .chain(label_text_iter.into_iter().flat_map(|iter| iter))
             .chain(self.storage.into_iter().enumerate().map(move |(idx, t)| {
-                let x = scale(idx as i32, self.config.x_from_range, self.config.x_to_range);
-                let y = scale(
-                    Into::<i32>::into(t),
-                    self.config.y_from_range,
-                    self.config.y_to_range,
-                );
-                Pixel(Point::new(x, y), Rgb888::GREEN)
+                let x = self
+                    .config
+                    .x_from
+                    .scale((idx as i32).into(), &self.config.x_to);
+                let value = Into::<i32>::into(t);
+                let y = self.config.y_from.scale(value.into(), &self.config.y_to);
+                Pixel(Point::new(x.p, y.p), Rgb888::GREEN)
             }))
     }
 
@@ -126,9 +128,7 @@ where
 
     fn labels(cfg: &'cfg InternalConfig<'cfg>) -> impl Iterator<Item = Pixel<Rgb888>> + 'cfg {
         cfg.label_storage.labels.iter().flat_map(move |label| {
-            let x = label.x_to;
-            let y = scale(label.y_from, cfg.y_from_range, cfg.y_to_range);
-            let text = Text::new(&label.string, Point::new(x, y));
+            let text = Text::new(&label.string, label.pos.into());
             text.into_styled(cfg.label_text_style).into_iter()
         })
     }
@@ -138,11 +138,11 @@ where
         recent: i32,
     ) -> Option<impl Iterator<Item = Pixel<Rgb888>>> {
         if let Some(c) = &cfg.cfg.label_line_color {
-            let x0 = cfg.x_to_range.0;
+            let x0 = cfg.x_to.r.0;
             let x1 = x0 + cfg.cfg.label_line_len;
-            let y = scale(recent, cfg.y_from_range, cfg.y_to_range);
+            let y = cfg.y_from.scale(recent.into(), &cfg.y_to);
             Some(
-                Line::new(Point::new(x0, y), Point::new(x1, y))
+                Line::new(Point::new(x0, y.p), Point::new(x1, y.p))
                     .into_styled(PrimitiveStyle::with_stroke(*c, 1))
                     .into_iter(),
             )
@@ -156,26 +156,15 @@ where
         recent: i32,
         string: &'a str,
     ) -> Option<impl Iterator<Item = Pixel<Rgb888>> + 'a> {
-        if let Some(_c) = &cfg.cfg.label_line_color {
-            let x = cfg.x_to_range.0 + cfg.cfg.label_line_len + i32::from(cfg.cfg.border_stroke);
-            let y = scale(recent, cfg.y_from_range, cfg.y_to_range);
-            let text = Text::new(&string, Point::new(x, y));
+        if cfg.cfg.label_line_color.is_some() {
+            let x: Position<frame::Window> = cfg.label_text_pos.p.x.into();
+            let y = cfg.y_from.scale(recent.into(), &cfg.y_to);
+            let text = Text::new(&string, Point::new(x.p, y.p));
             Some(text.into_styled(cfg.label_text_style).into_iter())
         } else {
             None
         }
     }
-}
-
-fn scale(x: i32, from_range: (i32, i32), to_range: (i32, i32)) -> i32 {
-    let from = (from_range.0 as f32, from_range.1 as f32);
-    let to = (to_range.0 as f32, to_range.1 as f32);
-    let sx = map_range(x as f32, from, to);
-    sx as i32
-}
-
-fn map_range(s: f32, from_range: (f32, f32), to_range: (f32, f32)) -> f32 {
-    to_range.0 + (s - from_range.0) * (to_range.1 - to_range.0) / (from_range.1 - from_range.0)
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ embedded-graphics = "0.6"
 # cargo build -Z features=dev_dep
 # cargo-features = ["dev_dep"]
 # https://github.com/rust-lang/cargo/issues/7916
+# https://github.com/rust-lang/cargo/issues/8127
 [dev-dependencies]
 rand = "0.7"
 embedded-graphics-simulator = "0.2"

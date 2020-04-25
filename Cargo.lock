@@ -244,7 +244,7 @@ name = "display"
 version = "0.1.0"
 dependencies = [
  "bcm2711-hal 0.1.0",
- "embedded-graphics 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-graphics 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "embedded-graphics"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -274,7 +274,7 @@ name = "embedded-graphics-simulator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "embedded-graphics 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-graphics 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.23.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "sdl2 0.32.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1049,7 +1049,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "uplot"
 version = "0.1.0"
 dependencies = [
- "embedded-graphics 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-graphics 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-graphics-simulator 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "generic-array 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapless 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1127,7 +1127,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum deflate 0.8.4 (registry+https://github.com/rust-lang/crates.io-index)" = "e7e5d2a2273fed52a7f947ee55b092c4057025d7a3e04e5ecdbd25d6c3fb1bd7"
 "checksum difference 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 "checksum either 1.5.3 (registry+https://github.com/rust-lang/crates.io-index)" = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
-"checksum embedded-graphics 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "619ef7a30b5368c6350a9edb41c628499a0a77072d1bfa949044473d23734e3c"
+"checksum embedded-graphics 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "40a69991ceb896bd4810a0cf2bcc46fc94b7860573c71f965d8e5b3d66942fed"
 "checksum embedded-graphics-simulator 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "eedd989c2c7d1f755fee3e86a02eea4802dd93c6d89ffd61cd13af48940f6075"
 "checksum embedded-hal 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ee4908a155094da7723c2d60d617b820061e3b4efcc3d9e293d206a5a76c170b"
 "checksum env_logger 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)" = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
