@@ -1,6 +1,3 @@
-//! A port of the analog-clock embedded-graphics example
-//! https://github.com/jamwaffles/embedded-graphics/blob/master/simulator/examples/analog-clock.rs
-
 #![no_std]
 #![no_main]
 
@@ -22,7 +19,6 @@ use display::{Display, SCRATCHPAD_MEM_MIN_SIZE};
 use generic_array::typenum::U256;
 use uplot::{Config, LabelStorage, LayoutConfig, Plot, Storage};
 
-/// The width and height of the simulated display
 const DISPLAY_WIDTH: i32 = 800;
 const DISPLAY_HEIGHT: i32 = 480;
 
